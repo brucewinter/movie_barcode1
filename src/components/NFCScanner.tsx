@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -21,20 +21,75 @@ interface MovieData {
 const NFCScanner = () => {
   const [isScanning, setIsScanning] = useState(false);
   const [movieData, setMovieData] = useState<MovieData | null>(null);
+  const [nfcSupported, setNfcSupported] = useState<boolean>(false);
   const { toast } = useToast();
+
+  useEffect(() => {
+    // Check NFC support on component mount
+    checkNFCSupport();
+  }, []);
+
+  const checkNFCSupport = async () => {
+    try {
+      console.log('Platform info:', {
+        isNativePlatform: Capacitor.isNativePlatform(),
+        platform: Capacitor.getPlatform()
+      });
+
+      if (Capacitor.isNativePlatform()) {
+        const supported = await NFC.isSupported();
+        console.log('NFC support check:', supported);
+        setNfcSupported(supported.supported);
+        
+        if (!supported.supported) {
+          toast({
+            title: "NFC Not Supported",
+            description: "This device doesn't support NFC functionality",
+            variant: "destructive"
+          });
+        }
+      } else {
+        console.log('Not on native platform - web preview');
+        setNfcSupported(false);
+      }
+    } catch (error) {
+      console.error('Error checking NFC support:', error);
+      setNfcSupported(false);
+    }
+  };
 
   const startNFCScan = async () => {
     setIsScanning(true);
     
     try {
+      // Check if we're on a native platform first
       if (!Capacitor.isNativePlatform()) {
-        // Fallback for web/preview
-        toast({
-          title: "NFC Not Available",
-          description: "NFC scanning only works on mobile devices",
-          variant: "destructive"
-        });
+        console.log('Web platform detected - using mock data');
+        // For web preview, simulate scanning after a delay
+        setTimeout(() => {
+          const mockMovieData = fetchMockMovieData();
+          setMovieData(mockMovieData);
+          toast({
+            title: "Demo Mode",
+            description: `Showing demo data: ${mockMovieData.title}`,
+          });
+          setIsScanning(false);
+        }, 2000);
         return;
+      }
+
+      // Check NFC support
+      if (!nfcSupported) {
+        const supported = await NFC.isSupported();
+        if (!supported.supported) {
+          toast({
+            title: "NFC Not Supported",
+            description: "This device doesn't support NFC functionality",
+            variant: "destructive"
+          });
+          setIsScanning(false);
+          return;
+        }
       }
 
       toast({
@@ -42,48 +97,43 @@ const NFCScanner = () => {
         description: "Hold your device near the DVD's NFC tag...",
       });
 
-      // Check if NFC is supported
-      const supported = await NFC.isSupported();
-      if (!supported.supported) {
-        throw new Error("NFC not supported on this device");
-      }
-
       // Set up the NFC tag listener
-      NFC.onRead((data: NDEFMessagesTransformable) => {
+      await NFC.onRead((data: NDEFMessagesTransformable) => {
         try {
+          console.log("Raw NFC data received:", data);
+          
           // Convert the NDEF message to string and extract movie ID
           const ndefString = data.string();
           const ndefData = typeof ndefString === 'string' ? ndefString : JSON.stringify(ndefString);
-          console.log("NFC data received:", ndefData);
+          console.log("Processed NFC data:", ndefData);
           
           // Extract movie identifier from NFC data
           const movieId = parseMovieIdFromNFC(ndefData);
+          console.log("Parsed movie ID:", movieId);
           
           if (movieId) {
-            fetchMovieData(movieId).then((movieData) => {
-              if (movieData) {
-                setMovieData(movieData);
-                toast({
-                  title: "Movie Found!",
-                  description: `Successfully scanned: ${movieData.title}`,
-                });
-              } else {
-                toast({
-                  title: "Movie Not Found",
-                  description: "This DVD is not in our database",
-                  variant: "destructive"
-                });
-              }
-              setIsScanning(false);
-            });
+            const movieData = fetchMovieData(movieId);
+            if (movieData) {
+              setMovieData(movieData);
+              toast({
+                title: "Movie Found!",
+                description: `Successfully scanned: ${movieData.title}`,
+              });
+            } else {
+              toast({
+                title: "Movie Not Found",
+                description: "This DVD is not in our database",
+                variant: "destructive"
+              });
+            }
           } else {
             toast({
               title: "Invalid Tag",
               description: "This NFC tag doesn't contain movie data",
               variant: "destructive"
             });
-            setIsScanning(false);
           }
+          setIsScanning(false);
         } catch (error) {
           console.error("Error parsing NFC data:", error);
           toast({
@@ -96,7 +146,7 @@ const NFCScanner = () => {
       });
 
       // Set up error handling
-      NFC.onError((error) => {
+      await NFC.onError((error) => {
         console.error("NFC Error:", error);
         toast({
           title: "NFC Error",
@@ -106,8 +156,9 @@ const NFCScanner = () => {
         setIsScanning(false);
       });
 
-      // Start scanning (iOS only, Android is always listening)
+      // Start scanning
       await NFC.startScan();
+      console.log('NFC scan started successfully');
 
     } catch (error) {
       console.error("NFC scan error:", error);
@@ -118,6 +169,19 @@ const NFCScanner = () => {
       });
       setIsScanning(false);
     }
+  };
+
+  const fetchMockMovieData = (): MovieData => {
+    return {
+      title: "The Dark Knight",
+      year: "2008",
+      imdbRating: "9.0",
+      rottenTomatoesRating: "94%",
+      poster: "/api/placeholder/300/450",
+      plot: "When the menace known as the Joker wreaks havoc and chaos on the people of Gotham, Batman must accept one of the greatest psychological and physical tests.",
+      director: "Christopher Nolan",
+      genre: "Action, Crime, Drama"
+    };
   };
 
   const parseMovieIdFromNFC = (ndefData: string): string | null => {
@@ -147,7 +211,7 @@ const NFCScanner = () => {
     return null;
   };
 
-  const fetchMovieData = async (movieId: string): Promise<MovieData | null> => {
+  const fetchMovieData = (movieId: string): MovieData | null => {
     // Mock data mapping - in production, this would call a real API
     const movieDatabase: Record<string, MovieData> = {
       "dark_knight": {
@@ -193,6 +257,16 @@ const NFCScanner = () => {
         </p>
       </div>
 
+      {/* Platform Status */}
+      <div className="flex justify-center">
+        <Badge variant={Capacitor.isNativePlatform() ? "default" : "secondary"}>
+          {Capacitor.isNativePlatform() ? 
+            `Native Platform (${Capacitor.getPlatform()})` : 
+            "Web Preview Mode"
+          }
+        </Badge>
+      </div>
+
       {/* Scan Button */}
       <div className="flex justify-center">
         <Button
@@ -204,12 +278,12 @@ const NFCScanner = () => {
           {isScanning ? (
             <>
               <Smartphone className="h-5 w-5 mr-2 animate-spin" />
-              Scanning...
+              {Capacitor.isNativePlatform() ? "Scanning..." : "Loading Demo..."}
             </>
           ) : (
             <>
               <Scan className="h-5 w-5 mr-2" />
-              Scan DVD Tag
+              {Capacitor.isNativePlatform() ? "Scan DVD Tag" : "Try Demo"}
             </>
           )}
         </Button>
@@ -279,9 +353,19 @@ const NFCScanner = () => {
             <div>
               <h3 className="font-semibold mb-2">How to use</h3>
               <p className="text-sm text-muted-foreground leading-relaxed">
-                1. Tap the "Scan DVD Tag" button<br />
-                2. Hold your phone near the NFC tag on your DVD<br />
-                3. View instant ratings from IMDB and Rotten Tomatoes
+                {Capacitor.isNativePlatform() ? (
+                  <>
+                    1. Tap the "Scan DVD Tag" button<br />
+                    2. Hold your phone near the NFC tag on your DVD<br />
+                    3. View instant ratings from IMDB and Rotten Tomatoes
+                  </>
+                ) : (
+                  <>
+                    1. Tap "Try Demo" to see how it works<br />
+                    2. Deploy to Android device for real NFC scanning<br />
+                    3. Enjoy instant movie ratings!
+                  </>
+                )}
               </p>
             </div>
           </CardContent>
