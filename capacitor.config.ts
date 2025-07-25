@@ -9,8 +9,8 @@ const config: CapacitorConfig = {
     cleartext: true
   },
   plugins: {
-    NFC: {
-      class: 'NFCPlugin'
+    Nfc: {
+      class: 'NfcPlugin'
     }
   }
 };

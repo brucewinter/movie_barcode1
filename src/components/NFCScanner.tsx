@@ -4,6 +4,8 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Scan, Smartphone, Film } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { Capacitor } from '@capacitor/core';
+import { NFC, NDEFMessagesTransformable } from '@exxili/capacitor-nfc';
 
 interface MovieData {
   title: string;
@@ -25,17 +27,130 @@ const NFCScanner = () => {
     setIsScanning(true);
     
     try {
-      // Simulate NFC scanning - in real implementation, this would use Capacitor NFC plugin
+      if (!Capacitor.isNativePlatform()) {
+        // Fallback for web/preview
+        toast({
+          title: "NFC Not Available",
+          description: "NFC scanning only works on mobile devices",
+          variant: "destructive"
+        });
+        return;
+      }
+
       toast({
         title: "NFC Scanning",
         description: "Hold your device near the DVD's NFC tag...",
       });
 
-      // Simulate scanning delay
-      await new Promise(resolve => setTimeout(resolve, 2000));
+      // Check if NFC is supported
+      const supported = await NFC.isSupported();
+      if (!supported.supported) {
+        throw new Error("NFC not supported on this device");
+      }
 
-      // Mock movie data - in real app, this would come from the NFC tag and API calls
-      const mockMovieData: MovieData = {
+      // Set up the NFC tag listener
+      NFC.onRead((data: NDEFMessagesTransformable) => {
+        try {
+          // Convert the NDEF message to string and extract movie ID
+          const ndefString = data.string();
+          const ndefData = typeof ndefString === 'string' ? ndefString : JSON.stringify(ndefString);
+          console.log("NFC data received:", ndefData);
+          
+          // Extract movie identifier from NFC data
+          const movieId = parseMovieIdFromNFC(ndefData);
+          
+          if (movieId) {
+            fetchMovieData(movieId).then((movieData) => {
+              if (movieData) {
+                setMovieData(movieData);
+                toast({
+                  title: "Movie Found!",
+                  description: `Successfully scanned: ${movieData.title}`,
+                });
+              } else {
+                toast({
+                  title: "Movie Not Found",
+                  description: "This DVD is not in our database",
+                  variant: "destructive"
+                });
+              }
+              setIsScanning(false);
+            });
+          } else {
+            toast({
+              title: "Invalid Tag",
+              description: "This NFC tag doesn't contain movie data",
+              variant: "destructive"
+            });
+            setIsScanning(false);
+          }
+        } catch (error) {
+          console.error("Error parsing NFC data:", error);
+          toast({
+            title: "Scan Error",
+            description: "Unable to read movie data from NFC tag",
+            variant: "destructive"
+          });
+          setIsScanning(false);
+        }
+      });
+
+      // Set up error handling
+      NFC.onError((error) => {
+        console.error("NFC Error:", error);
+        toast({
+          title: "NFC Error",
+          description: "NFC scanning failed. Please try again.",
+          variant: "destructive"
+        });
+        setIsScanning(false);
+      });
+
+      // Start scanning (iOS only, Android is always listening)
+      await NFC.startScan();
+
+    } catch (error) {
+      console.error("NFC scan error:", error);
+      toast({
+        title: "Scan Failed",
+        description: error instanceof Error ? error.message : "Unable to start NFC scanning",
+        variant: "destructive"
+      });
+      setIsScanning(false);
+    }
+  };
+
+  const parseMovieIdFromNFC = (ndefData: string): string | null => {
+    // Look for movie ID patterns in the NFC data
+    // This could be a URL, JSON, or simple string identifier
+    try {
+      // Try parsing as JSON first
+      const parsed = JSON.parse(ndefData);
+      if (parsed.movieId) return parsed.movieId;
+      if (parsed.title) return parsed.title.toLowerCase().replace(/\s+/g, '_');
+    } catch {
+      // If not JSON, treat as plain text and look for known patterns
+      const cleanData = ndefData.toLowerCase().trim();
+      
+      // Check for direct movie ID matches
+      if (cleanData.includes('dark_knight') || cleanData.includes('the dark knight')) {
+        return 'dark_knight';
+      }
+      if (cleanData.includes('inception')) {
+        return 'inception';
+      }
+      
+      // Return the cleaned data as potential movie ID
+      return cleanData.replace(/\s+/g, '_');
+    }
+    
+    return null;
+  };
+
+  const fetchMovieData = async (movieId: string): Promise<MovieData | null> => {
+    // Mock data mapping - in production, this would call a real API
+    const movieDatabase: Record<string, MovieData> = {
+      "dark_knight": {
         title: "The Dark Knight",
         year: "2008",
         imdbRating: "9.0",
@@ -44,22 +159,20 @@ const NFCScanner = () => {
         plot: "When the menace known as the Joker wreaks havoc and chaos on the people of Gotham, Batman must accept one of the greatest psychological and physical tests.",
         director: "Christopher Nolan",
         genre: "Action, Crime, Drama"
-      };
+      },
+      "inception": {
+        title: "Inception",
+        year: "2010",
+        imdbRating: "8.8",
+        rottenTomatoesRating: "87%",
+        poster: "/api/placeholder/300/450",
+        plot: "A thief who steals corporate secrets through dream-sharing technology is given the inverse task of planting an idea into the mind of a C.E.O.",
+        director: "Christopher Nolan",
+        genre: "Action, Sci-Fi, Thriller"
+      }
+    };
 
-      setMovieData(mockMovieData);
-      toast({
-        title: "Movie Found!",
-        description: `Successfully scanned: ${mockMovieData.title}`,
-      });
-    } catch (error) {
-      toast({
-        title: "Scan Failed",
-        description: "Unable to read NFC tag. Please try again.",
-        variant: "destructive"
-      });
-    } finally {
-      setIsScanning(false);
-    }
+    return movieDatabase[movieId] || null;
   };
 
   return (
