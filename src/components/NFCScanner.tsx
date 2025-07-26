@@ -36,25 +36,38 @@ const NFCScanner = () => {
         platform: Capacitor.getPlatform()
       });
 
+      // Check for Web NFC API first (works in modern browsers)
+      if ('NDEFReader' in window) {
+        console.log('Web NFC API available');
+        setNfcSupported(true);
+        return;
+      }
+
+      // Try Capacitor NFC plugin
       if (Capacitor.isNativePlatform()) {
-        const supported = await NFC.isSupported();
-        console.log('NFC support check:', supported);
-        setNfcSupported(supported.supported);
-        
-        if (!supported.supported) {
-          toast({
-            title: "NFC Not Supported",
-            description: "This device doesn't support NFC functionality",
-            variant: "destructive"
-          });
+        try {
+          const supported = await NFC.isSupported();
+          console.log('Capacitor NFC support check:', supported);
+          setNfcSupported(supported.supported);
+          
+          if (!supported.supported) {
+            toast({
+              title: "NFC Not Supported",
+              description: "This device doesn't support NFC functionality",
+              variant: "destructive"
+            });
+          }
+        } catch (nfcError) {
+          console.log('Capacitor NFC not available, checking Web NFC...');
+          setNfcSupported(false);
         }
       } else {
         console.log('Not on native platform - web preview');
-        setNfcSupported(false);
+        setNfcSupported(true); // Allow demo mode
       }
     } catch (error) {
       console.error('Error checking NFC support:', error);
-      setNfcSupported(false);
+      setNfcSupported(true); // Allow demo mode as fallback
     }
   };
 
@@ -62,34 +75,123 @@ const NFCScanner = () => {
     setIsScanning(true);
     
     try {
-      // Check if we're on a native platform first
-      if (!Capacitor.isNativePlatform()) {
-        console.log('Web platform detected - using mock data');
-        // For web preview, simulate scanning after a delay
-        setTimeout(() => {
-          const mockMovieData = fetchMockMovieData();
-          setMovieData(mockMovieData);
-          toast({
-            title: "Demo Mode",
-            description: `Showing demo data: ${mockMovieData.title}`,
-          });
-          setIsScanning(false);
-        }, 2000);
+      // Try Web NFC API first if available
+      if ('NDEFReader' in window) {
+        console.log('Using Web NFC API');
+        await startWebNFCScan();
         return;
       }
 
-      // Check NFC support
-      if (!nfcSupported) {
-        const supported = await NFC.isSupported();
-        if (!supported.supported) {
+      // Try Capacitor NFC if on native platform
+      if (Capacitor.isNativePlatform()) {
+        console.log('Using Capacitor NFC');
+        await startCapacitorNFCScan();
+        return;
+      }
+
+      // Fallback to demo mode
+      console.log('Using demo mode - no NFC available');
+      setTimeout(() => {
+        const mockMovieData = fetchMockMovieData();
+        setMovieData(mockMovieData);
+        toast({
+          title: "Demo Mode",
+          description: `Showing demo data: ${mockMovieData.title}`,
+        });
+        setIsScanning(false);
+      }, 2000);
+
+    } catch (error) {
+      console.error("NFC scan error:", error);
+      toast({
+        title: "Scan Failed",
+        description: error instanceof Error ? error.message : "Unable to start NFC scanning",
+        variant: "destructive"
+      });
+      setIsScanning(false);
+    }
+  };
+
+  const startWebNFCScan = async () => {
+    try {
+      // @ts-ignore - Web NFC API types not available
+      const ndef = new NDEFReader();
+      
+      toast({
+        title: "NFC Scanning",
+        description: "Hold your device near the DVD's NFC tag...",
+      });
+
+      await ndef.scan();
+      
+      ndef.addEventListener("reading", ({ message }: any) => {
+        console.log("Web NFC data received:", message);
+        
+        let ndefData = '';
+        for (const record of message.records) {
+          if (record.recordType === "text") {
+            const textDecoder = new TextDecoder(record.encoding);
+            ndefData += textDecoder.decode(record.data);
+          }
+        }
+        
+        console.log("Processed Web NFC data:", ndefData);
+        
+        const movieId = parseMovieIdFromNFC(ndefData);
+        console.log("Parsed movie ID:", movieId);
+        
+        if (movieId) {
+          const movieData = fetchMovieData(movieId);
+          if (movieData) {
+            setMovieData(movieData);
+            toast({
+              title: "Movie Found!",
+              description: `Successfully scanned: ${movieData.title}`,
+            });
+          } else {
+            toast({
+              title: "Movie Not Found",
+              description: "This DVD is not in our database",
+              variant: "destructive"
+            });
+          }
+        } else {
           toast({
-            title: "NFC Not Supported",
-            description: "This device doesn't support NFC functionality",
+            title: "Invalid Tag",
+            description: "This NFC tag doesn't contain movie data",
             variant: "destructive"
           });
-          setIsScanning(false);
-          return;
         }
+        setIsScanning(false);
+      });
+
+      ndef.addEventListener("readingerror", () => {
+        toast({
+          title: "NFC Error",
+          description: "Error reading NFC tag. Please try again.",
+          variant: "destructive"
+        });
+        setIsScanning(false);
+      });
+
+    } catch (error) {
+      console.error("Web NFC error:", error);
+      throw error;
+    }
+  };
+
+  const startCapacitorNFCScan = async () => {
+    try {
+      // Check NFC support
+      const supported = await NFC.isSupported();
+      if (!supported.supported) {
+        toast({
+          title: "NFC Not Supported",
+          description: "This device doesn't support NFC functionality",
+          variant: "destructive"
+        });
+        setIsScanning(false);
+        return;
       }
 
       toast({
@@ -100,14 +202,12 @@ const NFCScanner = () => {
       // Set up the NFC tag listener
       await NFC.onRead((data: NDEFMessagesTransformable) => {
         try {
-          console.log("Raw NFC data received:", data);
+          console.log("Raw Capacitor NFC data received:", data);
           
-          // Convert the NDEF message to string and extract movie ID
           const ndefString = data.string();
           const ndefData = typeof ndefString === 'string' ? ndefString : JSON.stringify(ndefString);
-          console.log("Processed NFC data:", ndefData);
+          console.log("Processed Capacitor NFC data:", ndefData);
           
-          // Extract movie identifier from NFC data
           const movieId = parseMovieIdFromNFC(ndefData);
           console.log("Parsed movie ID:", movieId);
           
@@ -135,7 +235,7 @@ const NFCScanner = () => {
           }
           setIsScanning(false);
         } catch (error) {
-          console.error("Error parsing NFC data:", error);
+          console.error("Error parsing Capacitor NFC data:", error);
           toast({
             title: "Scan Error",
             description: "Unable to read movie data from NFC tag",
@@ -145,9 +245,8 @@ const NFCScanner = () => {
         }
       });
 
-      // Set up error handling
       await NFC.onError((error) => {
-        console.error("NFC Error:", error);
+        console.error("Capacitor NFC Error:", error);
         toast({
           title: "NFC Error",
           description: "NFC scanning failed. Please try again.",
@@ -156,18 +255,12 @@ const NFCScanner = () => {
         setIsScanning(false);
       });
 
-      // Start scanning
       await NFC.startScan();
-      console.log('NFC scan started successfully');
+      console.log('Capacitor NFC scan started successfully');
 
     } catch (error) {
-      console.error("NFC scan error:", error);
-      toast({
-        title: "Scan Failed",
-        description: error instanceof Error ? error.message : "Unable to start NFC scanning",
-        variant: "destructive"
-      });
-      setIsScanning(false);
+      console.error("Capacitor NFC error:", error);
+      throw error;
     }
   };
 
