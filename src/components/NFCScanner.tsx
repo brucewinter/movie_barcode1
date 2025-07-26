@@ -2,7 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Scan, Smartphone, Film } from 'lucide-react';
+import { Input } from '@/components/ui/input';
+import { Scan, Smartphone, Film, Key, Settings } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { Capacitor } from '@capacitor/core';
 import { NFC, NDEFMessagesTransformable } from '@exxili/capacitor-nfc';
@@ -22,11 +23,21 @@ const NFCScanner = () => {
   const [isScanning, setIsScanning] = useState(false);
   const [movieData, setMovieData] = useState<MovieData | null>(null);
   const [nfcSupported, setNfcSupported] = useState<boolean>(false);
+  const [apiKey, setApiKey] = useState<string>('');
+  const [showApiKeyInput, setShowApiKeyInput] = useState(false);
   const { toast } = useToast();
 
   useEffect(() => {
     // Check NFC support on component mount
     checkNFCSupport();
+    
+    // Load API key from localStorage
+    const savedApiKey = localStorage.getItem('omdb_api_key');
+    if (savedApiKey) {
+      setApiKey(savedApiKey);
+    } else {
+      setShowApiKeyInput(true);
+    }
   }, []);
 
   const isMobileDevice = () => {
@@ -136,7 +147,7 @@ const NFCScanner = () => {
 
       await ndef.scan();
       
-      ndef.addEventListener("reading", ({ message }: any) => {
+      ndef.addEventListener("reading", async ({ message }: any) => {
         console.log("Web NFC data received:", message);
         
         let ndefData = '';
@@ -153,17 +164,25 @@ const NFCScanner = () => {
         console.log("Parsed movie ID:", movieId);
         
         if (movieId) {
-          const movieData = fetchMovieData(movieId);
-          if (movieData) {
-            setMovieData(movieData);
+          try {
+            const movieData = await fetchMovieData(movieId);
+            if (movieData) {
+              setMovieData(movieData);
+              toast({
+                title: "Movie Found!",
+                description: `Successfully scanned: ${movieData.title}`,
+              });
+            } else {
+              toast({
+                title: "Movie Not Found",
+                description: "This movie is not in the OMDB database",
+                variant: "destructive"
+              });
+            }
+          } catch (error) {
             toast({
-              title: "Movie Found!",
-              description: `Successfully scanned: ${movieData.title}`,
-            });
-          } else {
-            toast({
-              title: "Movie Not Found",
-              description: "This DVD is not in our database",
+              title: "API Error",
+              description: "Failed to fetch movie data",
               variant: "destructive"
             });
           }
@@ -212,7 +231,7 @@ const NFCScanner = () => {
       });
 
       // Set up the NFC tag listener
-      await NFC.onRead((data: NDEFMessagesTransformable) => {
+      await NFC.onRead(async (data: NDEFMessagesTransformable) => {
         try {
           console.log("Raw Capacitor NFC data received:", data);
           
@@ -224,17 +243,25 @@ const NFCScanner = () => {
           console.log("Parsed movie ID:", movieId);
           
           if (movieId) {
-            const movieData = fetchMovieData(movieId);
-            if (movieData) {
-              setMovieData(movieData);
+            try {
+              const movieData = await fetchMovieData(movieId);
+              if (movieData) {
+                setMovieData(movieData);
+                toast({
+                  title: "Movie Found!",
+                  description: `Successfully scanned: ${movieData.title}`,
+                });
+              } else {
+                toast({
+                  title: "Movie Not Found",
+                  description: "This movie is not in the OMDB database",
+                  variant: "destructive"
+                });
+              }
+            } catch (error) {
               toast({
-                title: "Movie Found!",
-                description: `Successfully scanned: ${movieData.title}`,
-              });
-            } else {
-              toast({
-                title: "Movie Not Found",
-                description: "This DVD is not in our database",
+                title: "API Error",
+                description: "Failed to fetch movie data",
                 variant: "destructive"
               });
             }
@@ -290,58 +317,97 @@ const NFCScanner = () => {
   };
 
   const parseMovieIdFromNFC = (ndefData: string): string | null => {
-    // Look for movie ID patterns in the NFC data
-    // This could be a URL, JSON, or simple string identifier
+    // Look for movie title or ID patterns in the NFC data
     try {
       // Try parsing as JSON first
       const parsed = JSON.parse(ndefData);
+      if (parsed.title) return parsed.title;
+      if (parsed.imdbID) return parsed.imdbID;
       if (parsed.movieId) return parsed.movieId;
-      if (parsed.title) return parsed.title.toLowerCase().replace(/\s+/g, '_');
     } catch {
-      // If not JSON, treat as plain text and look for known patterns
-      const cleanData = ndefData.toLowerCase().trim();
+      // If not JSON, treat as plain text
+      const cleanData = ndefData.trim();
       
-      // Check for direct movie ID matches
-      if (cleanData.includes('dark_knight') || cleanData.includes('the dark knight')) {
-        return 'dark_knight';
-      }
-      if (cleanData.includes('inception')) {
-        return 'inception';
+      // If it looks like an IMDB ID (tt followed by numbers)
+      if (/^tt\d+$/.test(cleanData)) {
+        return cleanData;
       }
       
-      // Return the cleaned data as potential movie ID
-      return cleanData.replace(/\s+/g, '_');
+      // Otherwise treat as movie title
+      return cleanData;
     }
     
     return null;
   };
 
-  const fetchMovieData = (movieId: string): MovieData | null => {
-    // Mock data mapping - in production, this would call a real API
-    const movieDatabase: Record<string, MovieData> = {
-      "dark_knight": {
-        title: "The Dark Knight",
-        year: "2008",
-        imdbRating: "9.0",
-        rottenTomatoesRating: "94%",
-        poster: "/api/placeholder/300/450",
-        plot: "When the menace known as the Joker wreaks havoc and chaos on the people of Gotham, Batman must accept one of the greatest psychological and physical tests.",
-        director: "Christopher Nolan",
-        genre: "Action, Crime, Drama"
-      },
-      "inception": {
-        title: "Inception",
-        year: "2010",
-        imdbRating: "8.8",
-        rottenTomatoesRating: "87%",
-        poster: "/api/placeholder/300/450",
-        plot: "A thief who steals corporate secrets through dream-sharing technology is given the inverse task of planting an idea into the mind of a C.E.O.",
-        director: "Christopher Nolan",
-        genre: "Action, Sci-Fi, Thriller"
-      }
-    };
+  const fetchMovieData = async (movieIdentifier: string): Promise<MovieData | null> => {
+    if (!apiKey) {
+      toast({
+        title: "API Key Required",
+        description: "Please enter your OMDB API key to fetch movie data",
+        variant: "destructive"
+      });
+      return null;
+    }
 
-    return movieDatabase[movieId] || null;
+    try {
+      let url = '';
+      
+      // Check if it's an IMDB ID (starts with 'tt')
+      if (movieIdentifier.startsWith('tt')) {
+        url = `https://www.omdbapi.com/?apikey=${apiKey}&i=${movieIdentifier}&plot=full`;
+      } else {
+        // Search by title
+        url = `https://www.omdbapi.com/?apikey=${apiKey}&t=${encodeURIComponent(movieIdentifier)}&plot=full`;
+      }
+      
+      console.log('Fetching movie data from OMDB:', url.replace(apiKey, '[API_KEY]'));
+      
+      const response = await fetch(url);
+      const data = await response.json();
+      
+      console.log('OMDB API response:', data);
+      
+      if (data.Response === 'False') {
+        console.log('Movie not found:', data.Error);
+        return null;
+      }
+      
+      // Extract Rotten Tomatoes rating from Ratings array
+      const rtRating = data.Ratings?.find((rating: any) => 
+        rating.Source === 'Rotten Tomatoes'
+      )?.Value || 'N/A';
+      
+      return {
+        title: data.Title,
+        year: data.Year,
+        imdbRating: data.imdbRating || 'N/A',
+        rottenTomatoesRating: rtRating,
+        poster: data.Poster !== 'N/A' ? data.Poster : '/api/placeholder/300/450',
+        plot: data.Plot || 'No plot available',
+        director: data.Director || 'Unknown',
+        genre: data.Genre || 'Unknown'
+      };
+      
+    } catch (error) {
+      console.error('Error fetching movie data:', error);
+      toast({
+        title: "API Error",
+        description: "Failed to fetch movie data. Please check your API key.",
+        variant: "destructive"
+      });
+      return null;
+    }
+  };
+
+  const saveApiKey = (key: string) => {
+    localStorage.setItem('omdb_api_key', key);
+    setApiKey(key);
+    setShowApiKeyInput(false);
+    toast({
+      title: "API Key Saved",
+      description: "Your OMDB API key has been saved locally",
+    });
   };
 
   return (
@@ -373,6 +439,78 @@ const NFCScanner = () => {
           }
         </Badge>
       </div>
+
+      {/* API Key Input */}
+      {(showApiKeyInput || !apiKey) && (
+        <Card className="bg-secondary/30 border-primary/20 max-w-md mx-auto">
+          <CardHeader className="text-center">
+            <CardTitle className="text-lg flex items-center justify-center gap-2">
+              <Key className="h-5 w-5" />
+              OMDB API Key Required
+            </CardTitle>
+            <p className="text-sm text-muted-foreground">
+              Enter your free OMDB API key to fetch real movie data
+            </p>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="flex gap-2">
+              <Input
+                type="password"
+                placeholder="Enter OMDB API key..."
+                value={apiKey}
+                onChange={(e) => setApiKey(e.target.value)}
+                className="flex-1"
+              />
+              <Button 
+                onClick={() => saveApiKey(apiKey)}
+                disabled={!apiKey.trim()}
+                variant="outline"
+              >
+                Save
+              </Button>
+            </div>
+            <p className="text-xs text-muted-foreground text-center">
+              Get your free API key at{" "}
+              <a 
+                href="https://www.omdbapi.com/apikey.aspx" 
+                target="_blank" 
+                rel="noopener noreferrer"
+                className="text-primary hover:underline"
+              >
+                omdbapi.com
+              </a>
+            </p>
+            {apiKey && (
+              <div className="flex justify-center">
+                <Button 
+                  variant="ghost" 
+                  size="sm"
+                  onClick={() => setShowApiKeyInput(false)}
+                >
+                  Continue without saving
+                </Button>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
+      {/* API Key Status */}
+      {apiKey && !showApiKeyInput && (
+        <div className="flex justify-center gap-2">
+          <Badge variant="outline" className="text-xs">
+            API Key: ••••••••
+          </Badge>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setShowApiKeyInput(true)}
+            className="h-6 px-2 text-xs"
+          >
+            <Settings className="h-3 w-3" />
+          </Button>
+        </div>
+      )}
 
       {/* Scan Button */}
       <div className="flex justify-center">
