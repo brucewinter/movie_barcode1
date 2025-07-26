@@ -29,22 +29,33 @@ const NFCScanner = () => {
     checkNFCSupport();
   }, []);
 
+  const isMobileDevice = () => {
+    return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+  };
+
   const checkNFCSupport = async () => {
     try {
+      const isMobile = isMobileDevice();
+      const hasWebNFC = 'NDEFReader' in window;
+      const isNative = Capacitor.isNativePlatform();
+      
       console.log('Platform info:', {
-        isNativePlatform: Capacitor.isNativePlatform(),
-        platform: Capacitor.getPlatform()
+        isMobileDevice: isMobile,
+        hasWebNFC: hasWebNFC,
+        isNativePlatform: isNative,
+        platform: Capacitor.getPlatform(),
+        userAgent: navigator.userAgent
       });
 
-      // Check for Web NFC API first (works in modern browsers)
-      if ('NDEFReader' in window) {
+      // Check for Web NFC API first (works in Chrome on Android)
+      if (hasWebNFC) {
         console.log('Web NFC API available');
         setNfcSupported(true);
         return;
       }
 
-      // Try Capacitor NFC plugin
-      if (Capacitor.isNativePlatform()) {
+      // Try Capacitor NFC plugin if on native platform
+      if (isNative) {
         try {
           const supported = await NFC.isSupported();
           console.log('Capacitor NFC support check:', supported);
@@ -58,16 +69,17 @@ const NFCScanner = () => {
             });
           }
         } catch (nfcError) {
-          console.log('Capacitor NFC not available, checking Web NFC...');
+          console.log('Capacitor NFC not available');
           setNfcSupported(false);
         }
       } else {
-        console.log('Not on native platform - web preview');
-        setNfcSupported(true); // Allow demo mode
+        // On mobile browser, assume NFC might be available
+        console.log(`${isMobile ? 'Mobile' : 'Desktop'} browser detected`);
+        setNfcSupported(isMobile); // Enable for mobile browsers
       }
     } catch (error) {
       console.error('Error checking NFC support:', error);
-      setNfcSupported(true); // Allow demo mode as fallback
+      setNfcSupported(isMobileDevice()); // Allow on mobile as fallback
     }
   };
 
@@ -352,10 +364,12 @@ const NFCScanner = () => {
 
       {/* Platform Status */}
       <div className="flex justify-center">
-        <Badge variant={Capacitor.isNativePlatform() ? "default" : "secondary"}>
+        <Badge variant={Capacitor.isNativePlatform() || isMobileDevice() ? "default" : "secondary"}>
           {Capacitor.isNativePlatform() ? 
             `Native Platform (${Capacitor.getPlatform()})` : 
-            "Web Preview Mode"
+            isMobileDevice() ? 
+              `Mobile Browser (${navigator.userAgent.includes('Android') ? 'Android' : 'iOS'})` :
+              "Desktop Preview Mode"
           }
         </Badge>
       </div>
@@ -371,12 +385,12 @@ const NFCScanner = () => {
           {isScanning ? (
             <>
               <Smartphone className="h-5 w-5 mr-2 animate-spin" />
-              {Capacitor.isNativePlatform() ? "Scanning..." : "Loading Demo..."}
+              {(Capacitor.isNativePlatform() || isMobileDevice()) ? "Scanning..." : "Loading Demo..."}
             </>
           ) : (
             <>
               <Scan className="h-5 w-5 mr-2" />
-              {Capacitor.isNativePlatform() ? "Scan DVD Tag" : "Try Demo"}
+              {(Capacitor.isNativePlatform() || isMobileDevice()) ? "Scan DVD Tag" : "Try Demo"}
             </>
           )}
         </Button>
@@ -446,16 +460,19 @@ const NFCScanner = () => {
             <div>
               <h3 className="font-semibold mb-2">How to use</h3>
               <p className="text-sm text-muted-foreground leading-relaxed">
-                {Capacitor.isNativePlatform() ? (
+                {(Capacitor.isNativePlatform() || isMobileDevice()) ? (
                   <>
                     1. Tap the "Scan DVD Tag" button<br />
                     2. Hold your phone near the NFC tag on your DVD<br />
                     3. View instant ratings from IMDB and Rotten Tomatoes
+                    {!Capacitor.isNativePlatform() && (
+                      <><br /><small>(Using Web NFC API in browser)</small></>
+                    )}
                   </>
                 ) : (
                   <>
                     1. Tap "Try Demo" to see how it works<br />
-                    2. Deploy to Android device for real NFC scanning<br />
+                    2. Open on Android device for real NFC scanning<br />
                     3. Enjoy instant movie ratings!
                   </>
                 )}
