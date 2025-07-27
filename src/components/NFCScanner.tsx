@@ -151,10 +151,46 @@ const NFCScanner = () => {
         console.log("Web NFC data received:", message);
         
         let ndefData = '';
-        for (const record of message.records) {
-          if (record.recordType === "text") {
-            const textDecoder = new TextDecoder(record.encoding);
-            ndefData += textDecoder.decode(record.data);
+        
+        console.log("Message has", message.records.length, "records");
+        
+        for (let i = 0; i < message.records.length; i++) {
+          const record = message.records[i];
+          console.log(`Record ${i}:`, {
+            recordType: record.recordType,
+            mediaType: record.mediaType,
+            id: record.id,
+            dataLength: record.data ? record.data.byteLength : 0
+          });
+          
+          if (record.data && record.data.byteLength > 0) {
+            try {
+              // Try different decoding methods based on record type
+              if (record.recordType === "text") {
+                const textDecoder = new TextDecoder(record.encoding || 'utf-8');
+                const text = textDecoder.decode(record.data);
+                console.log(`Record ${i} (text):`, text);
+                ndefData += text;
+              } else if (record.recordType === "url") {
+                const textDecoder = new TextDecoder('utf-8');
+                const url = textDecoder.decode(record.data);
+                console.log(`Record ${i} (url):`, url);
+                ndefData += url;
+              } else {
+                // For unknown types, try UTF-8 decoding
+                const textDecoder = new TextDecoder('utf-8');
+                const text = textDecoder.decode(record.data);
+                console.log(`Record ${i} (${record.recordType}):`, text);
+                ndefData += text;
+              }
+            } catch (error) {
+              console.log(`Failed to decode record ${i}:`, error);
+              // Try raw bytes as fallback
+              const bytes = new Uint8Array(record.data);
+              console.log(`Record ${i} raw bytes:`, Array.from(bytes));
+            }
+          } else {
+            console.log(`Record ${i} has no data or empty data`);
           }
         }
         
