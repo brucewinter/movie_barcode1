@@ -25,6 +25,7 @@ const NFCScanner = () => {
   const [nfcSupported, setNfcSupported] = useState<boolean>(false);
   const [apiKey, setApiKey] = useState<string>('');
   const [showApiKeyInput, setShowApiKeyInput] = useState(false);
+  const [debugInfo, setDebugInfo] = useState<string>('');
   const { toast } = useToast();
 
   useEffect(() => {
@@ -195,6 +196,9 @@ const NFCScanner = () => {
         }
         
         console.log("Processed Web NFC data:", ndefData);
+        
+        // Show debug info on screen
+        setDebugInfo(`NFC Records: ${message.records.length}, Data: "${ndefData}" (${ndefData.length} chars)`);
         
         const movieId = parseMovieIdFromNFC(ndefData);
         console.log("Parsed movie ID:", movieId);
@@ -595,6 +599,20 @@ const NFCScanner = () => {
           )}
         </Button>
       </div>
+
+      {/* Debug Info */}
+      {debugInfo && (
+        <Card className="bg-yellow-50 border-yellow-200 max-w-md mx-auto">
+          <CardContent className="pt-4">
+            <div className="text-center">
+              <h3 className="font-semibold text-yellow-800 mb-2">NFC Debug Info</h3>
+              <p className="text-sm text-yellow-700 break-all">
+                {debugInfo}
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Movie Information Card */}
       {movieData && (
