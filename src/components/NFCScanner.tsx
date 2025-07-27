@@ -317,27 +317,53 @@ const NFCScanner = () => {
   };
 
   const parseMovieIdFromNFC = (ndefData: string): string | null => {
-    // Look for movie title or ID patterns in the NFC data
+    console.log("Raw NFC data received:", ndefData);
+    console.log("NFC data type:", typeof ndefData);
+    console.log("NFC data length:", ndefData.length);
+    
+    // Handle empty or whitespace-only data
+    if (!ndefData || typeof ndefData !== 'string' || !ndefData.trim()) {
+      console.log("Empty or invalid NFC data");
+      return null;
+    }
+    
+    const cleanData = ndefData.trim();
+    console.log("Cleaned NFC data:", cleanData);
+    
     try {
       // Try parsing as JSON first
-      const parsed = JSON.parse(ndefData);
+      const parsed = JSON.parse(cleanData);
+      console.log("Parsed as JSON:", parsed);
       if (parsed.title) return parsed.title;
       if (parsed.imdbID) return parsed.imdbID;
       if (parsed.movieId) return parsed.movieId;
-    } catch {
-      // If not JSON, treat as plain text
-      const cleanData = ndefData.trim();
-      
-      // If it looks like an IMDB ID (tt followed by numbers)
-      if (/^tt\d+$/.test(cleanData)) {
-        return cleanData;
-      }
-      
-      // Otherwise treat as movie title
+      if (parsed.movie) return parsed.movie;
+    } catch (e) {
+      console.log("Not valid JSON, treating as plain text");
+    }
+    
+    // If it looks like an IMDB ID (tt followed by numbers)
+    if (/^tt\d+$/i.test(cleanData)) {
+      console.log("Detected IMDB ID:", cleanData);
       return cleanData;
     }
     
-    return null;
+    // Check for URL patterns (sometimes NFC tags contain URLs)
+    const urlMatch = cleanData.match(/(?:imdb\.com\/title\/)?(tt\d+)/i);
+    if (urlMatch) {
+      console.log("Extracted IMDB ID from URL:", urlMatch[1]);
+      return urlMatch[1];
+    }
+    
+    // If the data is very short (likely not a movie title), reject it
+    if (cleanData.length < 2) {
+      console.log("Data too short to be a movie title:", cleanData);
+      return null;
+    }
+    
+    // Otherwise treat as movie title
+    console.log("Treating as movie title:", cleanData);
+    return cleanData;
   };
 
   const fetchMovieData = async (movieIdentifier: string): Promise<MovieData | null> => {
