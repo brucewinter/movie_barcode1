@@ -95,6 +95,34 @@ const NFCScanner = () => {
     }
   };
 
+  const writeNFCTag = async (movieData: string) => {
+    try {
+      // @ts-ignore - Web NFC API types not available
+      const ndef = new NDEFReader();
+      
+      toast({
+        title: "Writing to NFC Tag",
+        description: "Hold your device near the tag to write movie data...",
+      });
+
+      await ndef.write({
+        records: [{ recordType: "text", data: movieData }]
+      });
+      
+      toast({
+        title: "Tag Written Successfully",
+        description: "Movie data has been written to the NFC tag",
+      });
+    } catch (error) {
+      console.error("NFC write error:", error);
+      toast({
+        title: "Write Failed",
+        description: error instanceof Error ? error.message : "Unable to write to NFC tag",
+        variant: "destructive"
+      });
+    }
+  };
+
   const startNFCScan = async () => {
     setIsScanning(true);
     
@@ -616,8 +644,8 @@ const NFCScanner = () => {
         </div>
       )}
 
-      {/* Scan Button */}
-      <div className="flex justify-center">
+      {/* Scan and Write Buttons */}
+      <div className="flex justify-center gap-4">
         <Button
           onClick={startNFCScan}
           disabled={isScanning}
@@ -636,6 +664,17 @@ const NFCScanner = () => {
             </>
           )}
         </Button>
+        
+        {(Capacitor.isNativePlatform() || isMobileDevice()) && 'NDEFReader' in window && (
+          <Button
+            onClick={() => writeNFCTag("tt0468569")}
+            variant="outline"
+            size="lg"
+            className="transition-all duration-300 transform hover:scale-105"
+          >
+            Write Test Data
+          </Button>
+        )}
       </div>
 
       {/* Debug Info */}
