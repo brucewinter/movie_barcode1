@@ -201,17 +201,39 @@ const NFCScanner = () => {
         
         console.log("Processed Web NFC data:", ndefData);
         
-        // Enhanced debugging for NFC records
-        const debugDetails = message.records.map((record: any, i: number) => ({
-          index: i,
-          recordType: record.recordType,
-          mediaType: record.mediaType,
-          id: record.id,
-          rawDataLength: record.data ? record.data.byteLength : 0,
-          rawDataPreview: record.data ? Array.from(new Uint8Array(record.data).slice(0, 16)).map((b: number) => b.toString(16).padStart(2, '0')).join(' ') : 'No data'
-        }));
+        // Deep debugging for NFC records
+        const debugDetails = message.records.map((record: any, i: number) => {
+          console.log(`Full record ${i}:`, record);
+          console.log(`Record ${i} keys:`, Object.keys(record));
+          
+          // Try multiple ways to access data
+          const dataAttempts = {
+            'record.data': record.data,
+            'record.payload': record.payload,
+            'record.content': record.content,
+            'record.value': record.value,
+            'record.text': record.text,
+            'record.uri': record.uri
+          };
+          
+          console.log(`Record ${i} data attempts:`, dataAttempts);
+          
+          return {
+            index: i,
+            recordType: record.recordType,
+            mediaType: record.mediaType,
+            id: record.id,
+            allKeys: Object.keys(record),
+            dataAttempts: dataAttempts,
+            rawDataLength: record.data ? record.data.byteLength : 0,
+            payloadLength: record.payload ? record.payload.byteLength : 0,
+            toString: record.toString ? record.toString() : 'No toString method'
+          };
+        });
         
-        setDebugInfo(`NFC Records: ${message.records.length}, Data: "${ndefData}" (${ndefData.length} chars)\nRecord Details: ${JSON.stringify(debugDetails, null, 2)}`);
+        console.log('Complete debug details:', debugDetails);
+        
+        setDebugInfo(`NFC Records: ${message.records.length}, Data: "${ndefData}" (${ndefData.length} chars)\nDetailed Debug: ${JSON.stringify(debugDetails, null, 2)}`);
         
         const movieId = parseMovieIdFromNFC(ndefData);
         console.log("Parsed movie ID:", movieId);
