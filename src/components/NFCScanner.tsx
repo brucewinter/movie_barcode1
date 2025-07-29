@@ -168,8 +168,12 @@ const NFCScanner = () => {
             try {
               // Try different decoding methods based on record type
               if (record.recordType === "text") {
-                const textDecoder = new TextDecoder(record.encoding || 'utf-8');
-                const text = textDecoder.decode(record.data);
+                // For text records, handle language encoding properly
+                const data = new Uint8Array(record.data);
+                const languageCodeLength = data[0] & 0x3f; // Get language code length
+                const textBytes = data.slice(languageCodeLength + 1); // Skip status byte and language code
+                const textDecoder = new TextDecoder('utf-8');
+                const text = textDecoder.decode(textBytes);
                 console.log(`Record ${i} (text):`, text);
                 ndefData += text;
               } else if (record.recordType === "url") {
