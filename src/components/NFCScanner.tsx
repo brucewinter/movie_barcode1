@@ -201,8 +201,17 @@ const NFCScanner = () => {
         
         console.log("Processed Web NFC data:", ndefData);
         
-        // Show debug info on screen
-        setDebugInfo(`NFC Records: ${message.records.length}, Data: "${ndefData}" (${ndefData.length} chars)`);
+        // Enhanced debugging for NFC records
+        const debugDetails = message.records.map((record: any, i: number) => ({
+          index: i,
+          recordType: record.recordType,
+          mediaType: record.mediaType,
+          id: record.id,
+          rawDataLength: record.data ? record.data.byteLength : 0,
+          rawDataPreview: record.data ? Array.from(new Uint8Array(record.data).slice(0, 16)).map((b: number) => b.toString(16).padStart(2, '0')).join(' ') : 'No data'
+        }));
+        
+        setDebugInfo(`NFC Records: ${message.records.length}, Data: "${ndefData}" (${ndefData.length} chars)\nRecord Details: ${JSON.stringify(debugDetails, null, 2)}`);
         
         const movieId = parseMovieIdFromNFC(ndefData);
         console.log("Parsed movie ID:", movieId);
