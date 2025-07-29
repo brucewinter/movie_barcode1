@@ -148,8 +148,11 @@ const NFCScanner = () => {
 
       await ndef.scan();
       
-      ndef.addEventListener("reading", async ({ message }: any) => {
-        console.log("Web NFC data received:", message);
+      ndef.addEventListener("reading", async ({ message, serialNumber }: any) => {
+        console.log("Complete Web NFC event:", { message, serialNumber });
+        console.log("Message object keys:", Object.keys(message));
+        console.log("Message toString:", message.toString ? message.toString() : 'No toString');
+        console.log("Serial number:", serialNumber);
         
         let ndefData = '';
         
