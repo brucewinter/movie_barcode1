@@ -151,68 +151,115 @@ const NFCScanner = () => {
       await ndef.scan();
       
       ndef.addEventListener("reading", async (event: any) => {
-        console.log("Raw memory reading event:", event);
+        console.log("FULL NFC EVENT OBJECT:", JSON.stringify(event, null, 2));
+        console.log("Event keys:", Object.keys(event));
+        console.log("Event prototype:", Object.getPrototypeOf(event));
         
         // Extract tag information
         const { message, serialNumber } = event;
         const tagInfo = {
-          serialNumber: serialNumber || 'Unknown',
-          messageRecords: message.records.length,
+          serialNumber: serialNumber || 'Unknown', 
+          messageRecords: message ? message.records.length : 0,
           timestamp: new Date().toISOString()
         };
         
-        setTagTechnology(`ISO 15693 (Serial: ${tagInfo.serialNumber})`);
+        setTagTechnology(`ISO 15693 (Serial: ${tagInfo.serialNumber.substring(0, 20)}...)`);
         
-        // Try to access raw tag data through various properties
-        let rawData = '';
         let memoryDump = [];
+        let allRawData = '';
         
-        // Check for raw memory access through the event object
-        if (event.target && event.target.tag) {
-          const tag = event.target.tag;
-          console.log("Tag object:", tag);
-          console.log("Tag properties:", Object.keys(tag));
-          
-          // Try to access memory blocks if available
-          if (tag.techList) {
-            setTagTechnology(`Technologies: ${tag.techList.join(', ')}`);
-          }
-          
-          if (tag.maxSize) {
-            console.log("Tag max size:", tag.maxSize);
+        // Deep dive into the event object to find raw memory
+        console.log("DETAILED EVENT ANALYSIS:");
+        console.log("- event.target:", event.target);
+        console.log("- event.message:", event.message);
+        console.log("- event.serialNumber:", event.serialNumber);
+        
+        // Try to access the underlying NFC tag object
+        if (event.target) {
+          console.log("TARGET KEYS:", Object.keys(event.target));
+          if (event.target.tag) {
+            const tag = event.target.tag;
+            console.log("TAG OBJECT:", tag);
+            console.log("TAG KEYS:", Object.keys(tag));
+            
+            // Look for raw memory or technology-specific data
+            if (tag.techList) {
+              setTagTechnology(`Technologies: ${tag.techList.join(', ')}`);
+            }
+            
+            // Try to access ISO 15693 specific properties
+            ['memory', 'blocks', 'data', 'rawData', 'payload', 'content'].forEach(prop => {
+              if (tag[prop]) {
+                console.log(`TAG.${prop}:`, tag[prop]);
+                memoryDump.push(`Tag.${prop}: ${JSON.stringify(tag[prop])}`);
+              }
+            });
           }
         }
         
-        // Analyze NDEF records for any raw data
-        for (let i = 0; i < message.records.length; i++) {
-          const record = message.records[i];
-          if (record.data) {
-            const bytes = new Uint8Array(record.data);
-            const hexString = Array.from(bytes).map(b => b.toString(16).padStart(2, '0')).join(' ');
-            memoryDump.push(`Record ${i}: ${hexString}`);
+        // Analyze NDEF message if present
+        if (message && message.records) {
+          console.log("MESSAGE RECORDS COUNT:", message.records.length);
+          
+          for (let i = 0; i < message.records.length; i++) {
+            const record = message.records[i];
+            console.log(`RECORD ${i} FULL OBJECT:`, record);
+            console.log(`RECORD ${i} KEYS:`, Object.keys(record));
             
-            // Try to decode as ASCII
-            const asciiAttempt = Array.from(bytes)
-              .map(b => (b >= 32 && b <= 126) ? String.fromCharCode(b) : '.')
-              .join('');
-            memoryDump.push(`ASCII: ${asciiAttempt}`);
+            if (record.data) {
+              const bytes = new Uint8Array(record.data);
+              const hexString = Array.from(bytes).map(b => b.toString(16).padStart(2, '0')).join(' ');
+              const asciiAttempt = Array.from(bytes)
+                .map(b => (b >= 32 && b <= 126) ? String.fromCharCode(b) : '.')
+                .join('');
+              
+              memoryDump.push(`Record ${i} (${record.recordType || 'unknown'}): ${hexString}`);
+              memoryDump.push(`Record ${i} ASCII: "${asciiAttempt}"`);
+              allRawData += asciiAttempt + ' ';
+              
+              console.log(`RECORD ${i} HEX:`, hexString);
+              console.log(`RECORD ${i} ASCII:`, asciiAttempt);
+            }
+            
+            // Try alternative data fields
+            ['payload', 'content', 'value', 'text'].forEach(field => {
+              if (record[field]) {
+                console.log(`RECORD ${i}.${field}:`, record[field]);
+                memoryDump.push(`Record ${i}.${field}: ${record[field]}`);
+              }
+            });
           }
+        } else {
+          memoryDump.push("No NDEF message found - this may be a raw ISO 15693 tag");
+        }
+        
+        // Try to decode the serial number itself for clues
+        if (serialNumber) {
+          memoryDump.push(`Serial (hex): ${serialNumber}`);
+          
+          // Convert serial number to see if it contains readable data
+          const serialBytes = serialNumber.split(':').map(hex => parseInt(hex, 16));
+          const serialAscii = serialBytes
+            .map(b => (b >= 32 && b <= 126) ? String.fromCharCode(b) : '.')
+            .join('');
+          memoryDump.push(`Serial ASCII: "${serialAscii}"`);
+          allRawData += serialAscii;
         }
         
         setMemoryBlocks(memoryDump);
-        setRawMemoryData(JSON.stringify(tagInfo, null, 2));
+        setRawMemoryData(`MessageRecords: ${tagInfo.messageRecords}\nTimestamp: ${tagInfo.timestamp}\nSerial: ${tagInfo.serialNumber}`);
         
-        // Look for library identifiers in the raw data
-        const libraryPatterns = analyzeLibraryData(memoryDump.join('\n'));
+        // Enhanced library pattern analysis
+        const libraryPatterns = analyzeLibraryData(allRawData);
         if (libraryPatterns.length > 0) {
-          setDebugInfo(`Potential library identifiers found: ${libraryPatterns.join(', ')}`);
+          setDebugInfo(`Library IDs found: ${libraryPatterns.join(', ')}`);
         } else {
-          setDebugInfo('No clear library identifiers detected in memory blocks');
+          setDebugInfo(`No clear library identifiers in ${memoryDump.length} memory sections. Raw data: "${allRawData.substring(0, 50)}..."`);
         }
         
         toast({
-          title: "Memory Read Complete",
-          description: `Read ${memoryDump.length} memory sections`,
+          title: "Memory Analysis Complete",
+          description: `Analyzed ${memoryDump.length} memory sections`,
         });
       });
 
