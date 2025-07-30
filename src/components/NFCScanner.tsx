@@ -26,6 +26,9 @@ const NFCScanner = () => {
   const [apiKey, setApiKey] = useState<string>('');
   const [showApiKeyInput, setShowApiKeyInput] = useState(false);
   const [debugInfo, setDebugInfo] = useState<string>('');
+  const [rawMemoryData, setRawMemoryData] = useState<string>('');
+  const [memoryBlocks, setMemoryBlocks] = useState<string[]>([]);
+  const [tagTechnology, setTagTechnology] = useState<string>('');
   const { toast } = useToast();
 
   useEffect(() => {
@@ -93,6 +96,243 @@ const NFCScanner = () => {
       console.error('Error checking NFC support:', error);
       setNfcSupported(isMobileDevice()); // Allow on mobile as fallback
     }
+  };
+
+  const readRawMemoryBlocks = async () => {
+    if (!nfcSupported) {
+      toast({
+        title: "NFC Not Supported",
+        description: "NFC functionality is not available on this device",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    setIsScanning(true);
+    setDebugInfo('');
+    setRawMemoryData('');
+    setMemoryBlocks([]);
+    setTagTechnology('');
+
+    try {
+      if ('NDEFReader' in window) {
+        await readRawMemoryWebNFC();
+      } else if (Capacitor.isNativePlatform()) {
+        await readRawMemoryCapacitor();
+      } else {
+        toast({
+          title: "Raw Memory Access Unavailable",
+          description: "Raw memory reading requires NFC support",
+          variant: "destructive"
+        });
+      }
+    } catch (error) {
+      console.error("Raw memory read error:", error);
+      toast({
+        title: "Memory Read Failed",
+        description: error instanceof Error ? error.message : "Unable to read raw memory",
+        variant: "destructive"
+      });
+    } finally {
+      setIsScanning(false);
+    }
+  };
+
+  const readRawMemoryWebNFC = async () => {
+    try {
+      // @ts-ignore - Web NFC API types not available
+      const ndef = new NDEFReader();
+      
+      toast({
+        title: "Reading Raw Memory",
+        description: "Hold device near tag to read memory blocks...",
+      });
+
+      await ndef.scan();
+      
+      ndef.addEventListener("reading", async (event: any) => {
+        console.log("Raw memory reading event:", event);
+        
+        // Extract tag information
+        const { message, serialNumber } = event;
+        const tagInfo = {
+          serialNumber: serialNumber || 'Unknown',
+          messageRecords: message.records.length,
+          timestamp: new Date().toISOString()
+        };
+        
+        setTagTechnology(`ISO 15693 (Serial: ${tagInfo.serialNumber})`);
+        
+        // Try to access raw tag data through various properties
+        let rawData = '';
+        let memoryDump = [];
+        
+        // Check for raw memory access through the event object
+        if (event.target && event.target.tag) {
+          const tag = event.target.tag;
+          console.log("Tag object:", tag);
+          console.log("Tag properties:", Object.keys(tag));
+          
+          // Try to access memory blocks if available
+          if (tag.techList) {
+            setTagTechnology(`Technologies: ${tag.techList.join(', ')}`);
+          }
+          
+          if (tag.maxSize) {
+            console.log("Tag max size:", tag.maxSize);
+          }
+        }
+        
+        // Analyze NDEF records for any raw data
+        for (let i = 0; i < message.records.length; i++) {
+          const record = message.records[i];
+          if (record.data) {
+            const bytes = new Uint8Array(record.data);
+            const hexString = Array.from(bytes).map(b => b.toString(16).padStart(2, '0')).join(' ');
+            memoryDump.push(`Record ${i}: ${hexString}`);
+            
+            // Try to decode as ASCII
+            const asciiAttempt = Array.from(bytes)
+              .map(b => (b >= 32 && b <= 126) ? String.fromCharCode(b) : '.')
+              .join('');
+            memoryDump.push(`ASCII: ${asciiAttempt}`);
+          }
+        }
+        
+        setMemoryBlocks(memoryDump);
+        setRawMemoryData(JSON.stringify(tagInfo, null, 2));
+        
+        // Look for library identifiers in the raw data
+        const libraryPatterns = analyzeLibraryData(memoryDump.join('\n'));
+        if (libraryPatterns.length > 0) {
+          setDebugInfo(`Potential library identifiers found: ${libraryPatterns.join(', ')}`);
+        } else {
+          setDebugInfo('No clear library identifiers detected in memory blocks');
+        }
+        
+        toast({
+          title: "Memory Read Complete",
+          description: `Read ${memoryDump.length} memory sections`,
+        });
+      });
+
+      ndef.addEventListener("readingerror", () => {
+        toast({
+          title: "Memory Read Error",
+          description: "Failed to read raw memory blocks",
+          variant: "destructive"
+        });
+      });
+
+    } catch (error) {
+      console.error("Web NFC raw memory error:", error);
+      throw error;
+    }
+  };
+
+  const readRawMemoryCapacitor = async () => {
+    try {
+      const supported = await NFC.isSupported();
+      if (!supported.supported) {
+        throw new Error("NFC not supported on this device");
+      }
+
+      toast({
+        title: "Reading Raw Memory",
+        description: "Hold device near tag to read memory blocks...",
+      });
+
+      await NFC.onRead(async (data: NDEFMessagesTransformable) => {
+        console.log("Capacitor raw memory data:", data);
+        
+        // Try to extract raw tag information
+        const rawString = data.string();
+        const hexData = 'No hex data available'; // The Capacitor NFC plugin doesn't provide hex data directly
+        
+        setTagTechnology('ISO 15693 (Capacitor)');
+        setRawMemoryData(`Raw String: ${rawString}\nHex Data: ${hexData}`);
+        
+        // Analyze the hex data for memory blocks
+        const memoryAnalysis = analyzeHexData(hexData);
+        setMemoryBlocks(memoryAnalysis);
+        
+        // Look for library patterns
+        const libraryPatterns = analyzeLibraryData(`${rawString} ${hexData}`);
+        if (libraryPatterns.length > 0) {
+          setDebugInfo(`Potential library identifiers: ${libraryPatterns.join(', ')}`);
+        } else {
+          setDebugInfo('No library identifiers detected');
+        }
+        
+        toast({
+          title: "Memory Read Complete",
+          description: `Analyzed ${memoryAnalysis.length} memory sections`,
+        });
+      });
+
+      await NFC.startScan();
+      
+    } catch (error) {
+      console.error("Capacitor raw memory error:", error);
+      throw error;
+    }
+  };
+
+  const analyzeHexData = (hexString: string): string[] => {
+    const analysis = [];
+    
+    if (!hexString || hexString === 'No hex data available') {
+      return ['No hex data to analyze'];
+    }
+    
+    // Split hex string into blocks (assuming 4-byte blocks like ISO 15693)
+    const cleanHex = hexString.replace(/[^0-9a-fA-F]/g, '');
+    const blockSize = 8; // 4 bytes = 8 hex characters
+    
+    for (let i = 0; i < cleanHex.length; i += blockSize) {
+      const blockNum = Math.floor(i / blockSize);
+      const hexBlock = cleanHex.substr(i, blockSize);
+      
+      if (hexBlock.length === blockSize) {
+        // Convert to ASCII
+        const ascii = hexBlock.match(/.{2}/g)
+          ?.map(hex => {
+            const code = parseInt(hex, 16);
+            return (code >= 32 && code <= 126) ? String.fromCharCode(code) : '.';
+          })
+          .join('') || '';
+        
+        analysis.push(`Block ${blockNum}: ${hexBlock} (${ascii})`);
+      }
+    }
+    
+    return analysis.length > 0 ? analysis : ['No valid memory blocks found'];
+  };
+
+  const analyzeLibraryData = (rawData: string): string[] => {
+    const patterns = [];
+    const data = rawData.toLowerCase();
+    
+    // Look for common library patterns
+    const libraryPatterns = [
+      /\b\d{10,}\b/g, // Long numbers (barcodes)
+      /\b[a-z]{2,3}\d{6,}\b/g, // Library codes (like VH123456)
+      /\btt\d{7,}\b/g, // IMDB IDs
+      /\b\d{13}\b/g, // ISBN-13
+      /\b\d{10}\b/g, // ISBN-10
+      /vestavia/g, // Library name
+      /dvd/g, // Media type
+      /\b[a-z]+\d{4,}\b/g // General alphanumeric codes
+    ];
+    
+    libraryPatterns.forEach((pattern, index) => {
+      const matches = data.match(pattern);
+      if (matches) {
+        patterns.push(...matches.slice(0, 3)); // Limit to first 3 matches per pattern
+      }
+    });
+    
+    return [...new Set(patterns)]; // Remove duplicates
   };
 
   const writeNFCTag = async (movieData: string) => {
@@ -675,6 +915,26 @@ const NFCScanner = () => {
             Write Test Data
           </Button>
         )}
+        
+        <Button
+          onClick={readRawMemoryBlocks}
+          disabled={isScanning}
+          variant="secondary"
+          size="lg"
+          className="transition-all duration-300 transform hover:scale-105"
+        >
+          {isScanning ? (
+            <>
+              <Smartphone className="h-5 w-5 mr-2 animate-spin" />
+              Reading Memory...
+            </>
+          ) : (
+            <>
+              <Settings className="h-5 w-5 mr-2" />
+              Debug Raw Memory
+            </>
+          )}
+        </Button>
       </div>
 
       {/* Debug Info */}
@@ -686,6 +946,54 @@ const NFCScanner = () => {
               <p className="text-sm text-yellow-700 break-all">
                 {debugInfo}
               </p>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Tag Technology Info */}
+      {tagTechnology && (
+        <Card className="bg-blue-50 border-blue-200 max-w-md mx-auto">
+          <CardContent className="pt-4">
+            <div className="text-center">
+              <h3 className="font-semibold text-blue-800 mb-2">Tag Technology</h3>
+              <p className="text-sm text-blue-700">
+                {tagTechnology}
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Raw Memory Data Display */}
+      {rawMemoryData && (
+        <Card className="bg-green-50 border-green-200 max-w-2xl mx-auto">
+          <CardHeader>
+            <CardTitle className="text-lg text-green-800 text-center">Raw Memory Data</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <pre className="text-xs text-green-700 bg-green-100 p-3 rounded overflow-x-auto whitespace-pre-wrap">
+              {rawMemoryData}
+            </pre>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Memory Blocks Display */}
+      {memoryBlocks.length > 0 && (
+        <Card className="bg-purple-50 border-purple-200 max-w-4xl mx-auto">
+          <CardHeader>
+            <CardTitle className="text-lg text-purple-800 text-center">
+              Memory Blocks Analysis ({memoryBlocks.length} blocks)
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-2">
+              {memoryBlocks.map((block, index) => (
+                <div key={index} className="text-xs font-mono text-purple-700 bg-purple-100 p-2 rounded">
+                  {block}
+                </div>
+              ))}
             </div>
           </CardContent>
         </Card>
