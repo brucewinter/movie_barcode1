@@ -194,6 +194,58 @@ const NFCScanner = () => {
                 memoryDump.push(`Tag.${prop}: ${JSON.stringify(tag[prop])}`);
               }
             });
+            
+            // Try to read ISO 15693 memory blocks directly
+            if (tag.technology === 'ISO 15693' || tag.type === 'ISO 15693') {
+              try {
+                console.log("Attempting to read ISO 15693 memory blocks...");
+                
+                // Try reading first 8 blocks (common for library systems)
+                for (let blockNum = 0; blockNum < 8; blockNum++) {
+                  try {
+                    let blockData = null;
+                    
+                    // Try different methods to read blocks
+                    if (typeof tag.readSingleBlock === 'function') {
+                      blockData = await tag.readSingleBlock(blockNum);
+                    } else if (typeof tag.readMultipleBlocks === 'function') {
+                      blockData = await tag.readMultipleBlocks(blockNum, 1);
+                    } else if (typeof event.target.readSingleBlock === 'function') {
+                      blockData = await event.target.readSingleBlock(blockNum);
+                    }
+                    
+                    if (blockData && blockData.byteLength > 0) {
+                      const bytes = new Uint8Array(blockData);
+                      const hexString = Array.from(bytes).map(b => b.toString(16).padStart(2, '0')).join(' ');
+                      const asciiAttempt = Array.from(bytes)
+                        .map(b => (b >= 32 && b <= 126) ? String.fromCharCode(b) : '·')
+                        .join('');
+                      const readableOnly = Array.from(bytes)
+                        .filter(b => b >= 32 && b <= 126)
+                        .map(b => String.fromCharCode(b))
+                        .join('');
+                      
+                      memoryDump.push(`Block ${blockNum}: ${hexString}`);
+                      memoryDump.push(`Block ${blockNum} ASCII: "${asciiAttempt}"`);
+                      if (readableOnly) {
+                        memoryDump.push(`Block ${blockNum} readable: "${readableOnly}"`);
+                        allRawData += readableOnly + ' ';
+                      }
+                    }
+                  } catch (blockError) {
+                    console.log(`Error reading block ${blockNum}:`, blockError);
+                    memoryDump.push(`Block ${blockNum}: Error - ${blockError.message}`);
+                  }
+                }
+              } catch (memoryError) {
+                console.log("Memory reading error:", memoryError);
+                memoryDump.push(`Memory reading error: ${memoryError.message}`);
+              }
+            } else {
+              memoryDump.push("Tag technology not recognized as ISO 15693");
+            }
+          } else {
+            memoryDump.push("No tag object found in event.target");
           }
         }
         
