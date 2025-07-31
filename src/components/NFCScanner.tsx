@@ -232,45 +232,76 @@ const NFCScanner = () => {
               memoryDump.push(`Tech extras: ${JSON.stringify(event.target.techExtras)}`);
             }
             
-            // Try calling transceive to manually read memory blocks
-            if (typeof event.target.transceive === 'function') {
-              try {
-                console.log("Attempting manual block reading with transceive...");
+            // Try more direct access to NFC tag through NDEFReadingEvent
+            try {
+              console.log("Attempting direct NFC tag access...");
+              
+              // Access the underlying NFC tag from the reading event
+              const nfcTag = event.target.nfcTag || event.target.tag;
+              if (nfcTag) {
+                console.log("NFC tag object found:", nfcTag);
+                console.log("NFC tag keys:", Object.keys(nfcTag));
                 
-                // ISO 15693 Read Single Block command format
-                for (let blockNum = 0; blockNum < 8; blockNum++) {
-                  try {
-                    // ISO 15693 command: 0x20 (read single block) + block number
-                    const command = new Uint8Array([0x20, blockNum]);
-                    const response = await event.target.transceive(command);
-                    
-                    if (response && response.byteLength > 0) {
-                      const bytes = new Uint8Array(response);
-                      const hexString = Array.from(bytes).map(b => b.toString(16).padStart(2, '0')).join(':');
-                      const asciiAttempt = Array.from(bytes)
-                        .map(b => (b >= 32 && b <= 126) ? String.fromCharCode(b) : '·')
-                        .join('');
-                      
-                      memoryDump.push(`Transceive Block ${blockNum}: ${hexString}`);
-                      memoryDump.push(`Transceive Block ${blockNum} ASCII: "${asciiAttempt}"`);
-                      
-                      // Check if this looks like the expected format (04:11:00:05)
-                      if (hexString.includes('04') && hexString.includes('11')) {
-                        memoryDump.push(`*** POTENTIAL MATCH for library data format! ***`);
-                        allRawData += asciiAttempt + ' ';
-                      }
-                    }
-                  } catch (transceiveError) {
-                    console.log(`Transceive error for block ${blockNum}:`, transceiveError);
-                    memoryDump.push(`Transceive Block ${blockNum}: Error - ${transceiveError.message}`);
+                // Try to access ISO 15693 specific data
+                if (nfcTag.ndefV5 || nfcTag.iso15693) {
+                  const iso15693Data = nfcTag.ndefV5 || nfcTag.iso15693;
+                  console.log("ISO15693 data:", iso15693Data);
+                  
+                  if (iso15693Data.memoryBlocks) {
+                    iso15693Data.memoryBlocks.forEach((block: any, index: number) => {
+                      const hexString = Array.isArray(block) ? 
+                        block.map(b => b.toString(16).padStart(2, '0')).join(':') :
+                        block.toString();
+                      memoryDump.push(`ISO15693 Block ${index}: ${hexString}`);
+                    });
                   }
                 }
-              } catch (transceiveSetupError) {
-                console.log("Transceive setup error:", transceiveSetupError);
-                memoryDump.push(`Transceive setup error: ${transceiveSetupError.message}`);
+                
+                // Try accessing via techExtras which might contain ISO 15693 blocks
+                if (nfcTag.techExtras) {
+                  Object.entries(nfcTag.techExtras).forEach(([tech, data]) => {
+                    console.log(`Tech ${tech}:`, data);
+                    if (data && typeof data === 'object' && (data as any).blocks) {
+                      (data as any).blocks.forEach((block: any, index: number) => {
+                        const hexString = Array.isArray(block) ? 
+                          block.map(b => b.toString(16).padStart(2, '0')).join(':') :
+                          block.toString();
+                        memoryDump.push(`${tech} Block ${index}: ${hexString}`);
+                      });
+                    }
+                  });
+                }
               }
-            } else {
-              memoryDump.push("No transceive method available on event.target");
+              
+              // Try accessing raw data through different APIs
+              if (event.target.readRawMemory) {
+                console.log("Found readRawMemory method");
+                const rawMemory = await event.target.readRawMemory();
+                console.log("Raw memory:", rawMemory);
+                memoryDump.push(`Raw memory: ${JSON.stringify(rawMemory)}`);
+              }
+              
+              // Try HCE (Host Card Emulation) data access
+              if (event.target.hce || event.target.hostCardEmulation) {
+                const hceData = event.target.hce || event.target.hostCardEmulation;
+                console.log("HCE data:", hceData);
+                memoryDump.push(`HCE data: ${JSON.stringify(hceData)}`);
+              }
+              
+              // Check if the event has any ArrayBuffer or memory-like data
+              Object.getOwnPropertyNames(event.target).forEach(prop => {
+                const value = event.target[prop];
+                if (value instanceof ArrayBuffer || value instanceof Uint8Array) {
+                  const bytes = new Uint8Array(value);
+                  const hexString = Array.from(bytes).map(b => b.toString(16).padStart(2, '0')).join(':');
+                  memoryDump.push(`Found ${prop} ArrayBuffer: ${hexString}`);
+                  console.log(`${prop} as hex:`, hexString);
+                }
+              });
+              
+            } catch (directAccessError) {
+              console.log("Direct access error:", directAccessError);
+              memoryDump.push(`Direct access error: ${directAccessError.message}`);
             }
           } else {
             memoryDump.push("No tag object found in event.target");
