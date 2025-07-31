@@ -195,54 +195,82 @@ const NFCScanner = () => {
               }
             });
             
-            // Try to read ISO 15693 memory blocks directly
-            if (tag.technology === 'ISO 15693' || tag.type === 'ISO 15693') {
+            // Try to access event.target directly for raw memory data
+            console.log("EVENT.TARGET full object:", event.target);
+            console.log("EVENT.TARGET constructor:", event.target.constructor.name);
+            console.log("EVENT.TARGET prototype:", Object.getPrototypeOf(event.target));
+            
+            // Look for any properties that might contain memory block data
+            Object.getOwnPropertyNames(event.target).forEach(prop => {
+              const value = event.target[prop];
+              console.log(`EVENT.TARGET.${prop}:`, value);
+              if (typeof value === 'object' && value !== null) {
+                console.log(`EVENT.TARGET.${prop} type:`, value.constructor.name);
+                console.log(`EVENT.TARGET.${prop} keys:`, Object.keys(value));
+              }
+            });
+            
+            // Try to access the HfTag or similar underlying object
+            if (event.target.hfTag || event.target.tag || event.target.nfcTag) {
+              const nfcTag = event.target.hfTag || event.target.tag || event.target.nfcTag;
+              console.log("NFC TAG OBJECT:", nfcTag);
+              console.log("NFC TAG KEYS:", Object.keys(nfcTag));
+              
+              // Look for memory blocks in the native tag object
+              ['memory', 'blocks', 'data', 'contents', 'payload'].forEach(prop => {
+                if (nfcTag[prop]) {
+                  console.log(`NFC_TAG.${prop}:`, nfcTag[prop]);
+                  memoryDump.push(`NFC_TAG.${prop}: ${JSON.stringify(nfcTag[prop])}`);
+                }
+              });
+            }
+            
+            // Try to simulate an NFC app's approach - look for memory block arrays
+            // The NFC app shows "04:11:00:05" which suggests 4-byte blocks
+            if (event.target.techExtras) {
+              console.log("TECH EXTRAS:", event.target.techExtras);
+              memoryDump.push(`Tech extras: ${JSON.stringify(event.target.techExtras)}`);
+            }
+            
+            // Try calling transceive to manually read memory blocks
+            if (typeof event.target.transceive === 'function') {
               try {
-                console.log("Attempting to read ISO 15693 memory blocks...");
+                console.log("Attempting manual block reading with transceive...");
                 
-                // Try reading first 8 blocks (common for library systems)
+                // ISO 15693 Read Single Block command format
                 for (let blockNum = 0; blockNum < 8; blockNum++) {
                   try {
-                    let blockData = null;
+                    // ISO 15693 command: 0x20 (read single block) + block number
+                    const command = new Uint8Array([0x20, blockNum]);
+                    const response = await event.target.transceive(command);
                     
-                    // Try different methods to read blocks
-                    if (typeof tag.readSingleBlock === 'function') {
-                      blockData = await tag.readSingleBlock(blockNum);
-                    } else if (typeof tag.readMultipleBlocks === 'function') {
-                      blockData = await tag.readMultipleBlocks(blockNum, 1);
-                    } else if (typeof event.target.readSingleBlock === 'function') {
-                      blockData = await event.target.readSingleBlock(blockNum);
-                    }
-                    
-                    if (blockData && blockData.byteLength > 0) {
-                      const bytes = new Uint8Array(blockData);
-                      const hexString = Array.from(bytes).map(b => b.toString(16).padStart(2, '0')).join(' ');
+                    if (response && response.byteLength > 0) {
+                      const bytes = new Uint8Array(response);
+                      const hexString = Array.from(bytes).map(b => b.toString(16).padStart(2, '0')).join(':');
                       const asciiAttempt = Array.from(bytes)
                         .map(b => (b >= 32 && b <= 126) ? String.fromCharCode(b) : '·')
                         .join('');
-                      const readableOnly = Array.from(bytes)
-                        .filter(b => b >= 32 && b <= 126)
-                        .map(b => String.fromCharCode(b))
-                        .join('');
                       
-                      memoryDump.push(`Block ${blockNum}: ${hexString}`);
-                      memoryDump.push(`Block ${blockNum} ASCII: "${asciiAttempt}"`);
-                      if (readableOnly) {
-                        memoryDump.push(`Block ${blockNum} readable: "${readableOnly}"`);
-                        allRawData += readableOnly + ' ';
+                      memoryDump.push(`Transceive Block ${blockNum}: ${hexString}`);
+                      memoryDump.push(`Transceive Block ${blockNum} ASCII: "${asciiAttempt}"`);
+                      
+                      // Check if this looks like the expected format (04:11:00:05)
+                      if (hexString.includes('04') && hexString.includes('11')) {
+                        memoryDump.push(`*** POTENTIAL MATCH for library data format! ***`);
+                        allRawData += asciiAttempt + ' ';
                       }
                     }
-                  } catch (blockError) {
-                    console.log(`Error reading block ${blockNum}:`, blockError);
-                    memoryDump.push(`Block ${blockNum}: Error - ${blockError.message}`);
+                  } catch (transceiveError) {
+                    console.log(`Transceive error for block ${blockNum}:`, transceiveError);
+                    memoryDump.push(`Transceive Block ${blockNum}: Error - ${transceiveError.message}`);
                   }
                 }
-              } catch (memoryError) {
-                console.log("Memory reading error:", memoryError);
-                memoryDump.push(`Memory reading error: ${memoryError.message}`);
+              } catch (transceiveSetupError) {
+                console.log("Transceive setup error:", transceiveSetupError);
+                memoryDump.push(`Transceive setup error: ${transceiveSetupError.message}`);
               }
             } else {
-              memoryDump.push("Tag technology not recognized as ISO 15693");
+              memoryDump.push("No transceive method available on event.target");
             }
           } else {
             memoryDump.push("No tag object found in event.target");
