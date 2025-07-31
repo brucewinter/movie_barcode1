@@ -239,11 +239,37 @@ const NFCScanner = () => {
           
           // Convert serial number to see if it contains readable data
           const serialBytes = serialNumber.split(':').map(hex => parseInt(hex, 16));
+          const serialDecimal = serialBytes.join(',');
+          
+          // Enhanced ASCII interpretation
           const serialAscii = serialBytes
-            .map(b => (b >= 32 && b <= 126) ? String.fromCharCode(b) : '.')
+            .map(b => {
+              if (b >= 32 && b <= 126) return String.fromCharCode(b);
+              if (b === 0) return '∅';
+              return '·';
+            })
             .join('');
+            
+          // Extract only printable characters
+          const readableOnly = serialBytes
+            .filter(b => b >= 32 && b <= 126)
+            .map(b => String.fromCharCode(b))
+            .join('');
+          
+          memoryDump.push(`Serial bytes: [${serialDecimal}]`);
           memoryDump.push(`Serial ASCII: "${serialAscii}"`);
-          allRawData += serialAscii;
+          if (readableOnly) {
+            memoryDump.push(`Serial readable: "${readableOnly}"`);
+            allRawData += readableOnly;
+          } else {
+            memoryDump.push(`Serial readable: (no printable characters)`);
+          }
+          
+          // Check for common patterns
+          const hasSequential = serialBytes.some((b, i) => i > 0 && b === serialBytes[i-1] + 1);
+          const hasRepeating = serialBytes.some((b, i) => i > 0 && b === serialBytes[i-1]);
+          if (hasSequential) memoryDump.push(`Serial pattern: Sequential bytes detected`);
+          if (hasRepeating) memoryDump.push(`Serial pattern: Repeating bytes detected`);
         }
         
         setMemoryBlocks(memoryDump);
