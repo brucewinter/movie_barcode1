@@ -53,19 +53,75 @@ const NFCScanner = () => {
       const isMobile = isMobileDevice();
       const hasWebNFC = 'NDEFReader' in window;
       const isNative = Capacitor.isNativePlatform();
+      const isSecure = location.protocol === 'https:' || location.hostname === 'localhost';
       
-      console.log('Platform info:', {
+      console.log('Detailed platform info:', {
         isMobileDevice: isMobile,
         hasWebNFC: hasWebNFC,
         isNativePlatform: isNative,
         platform: Capacitor.getPlatform(),
-        userAgent: navigator.userAgent
+        isSecure: isSecure,
+        protocol: location.protocol,
+        hostname: location.hostname,
+        userAgent: navigator.userAgent,
+        permissions: typeof navigator.permissions !== 'undefined'
       });
 
-      // Check for Web NFC API first (works in Chrome on Android)
-      if (hasWebNFC) {
-        console.log('Web NFC API available');
+      // Enhanced mobile browser detection
+      const isAndroid = /Android/i.test(navigator.userAgent);
+      const isChrome = /Chrome/i.test(navigator.userAgent);
+      const isEdge = /Edg/i.test(navigator.userAgent);
+      
+      console.log('Browser details:', {
+        isAndroid,
+        isChrome,
+        isEdge,
+        supportsWebNFC: hasWebNFC,
+        secureContext: isSecure
+      });
+
+      // Check Web NFC availability and permissions
+      if (hasWebNFC && isSecure) {
+        console.log('Web NFC API available and secure context');
+        
+        // Test permissions if available
+        if (navigator.permissions) {
+          try {
+            // @ts-ignore - NFC permission might not be in types
+            const permission = await navigator.permissions.query({ name: 'nfc' });
+            console.log('NFC permission status:', permission.state);
+            
+            if (permission.state === 'denied') {
+              toast({
+                title: "NFC Permission Denied",
+                description: "Please enable NFC permissions in browser settings",
+                variant: "destructive"
+              });
+            }
+          } catch (permError) {
+            console.log('Permission check failed:', permError);
+          }
+        }
+        
         setNfcSupported(true);
+        return;
+      } else if (hasWebNFC && !isSecure) {
+        console.log('Web NFC available but requires HTTPS');
+        toast({
+          title: "HTTPS Required",
+          description: "Web NFC requires a secure HTTPS connection",
+          variant: "destructive"
+        });
+        setNfcSupported(false);
+        return;
+      } else if (isAndroid && (isChrome || isEdge) && !hasWebNFC) {
+        console.log('Android Chrome/Edge but no Web NFC - may need to enable flags');
+        toast({
+          title: "Web NFC Not Available",
+          description: "Enable chrome://flags/#enable-experimental-web-platform-features",
+          variant: "destructive"
+        });
+        setNfcSupported(true); // Still allow trying
         return;
       }
 
@@ -88,13 +144,13 @@ const NFCScanner = () => {
           setNfcSupported(false);
         }
       } else {
-        // On mobile browser, assume NFC might be available
+        // Fallback for mobile browsers
         console.log(`${isMobile ? 'Mobile' : 'Desktop'} browser detected`);
-        setNfcSupported(isMobile); // Enable for mobile browsers
+        setNfcSupported(isMobile);
       }
     } catch (error) {
       console.error('Error checking NFC support:', error);
-      setNfcSupported(isMobileDevice()); // Allow on mobile as fallback
+      setNfcSupported(isMobileDevice());
     }
   };
 
