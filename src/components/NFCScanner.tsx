@@ -426,38 +426,94 @@ const NFCScanner = () => {
         description: "Hold device near tag to read memory blocks...",
       });
 
+      // Use the standard onRead method with enhanced logging
       await NFC.onRead(async (data: NDEFMessagesTransformable) => {
-        console.log("Capacitor raw memory data:", data);
+        console.log("Capacitor NFC raw data:", data);
         
-        // Try to extract raw tag information
+        let memoryDump = [];
+        let allRawData = '';
+        
+        // Extract the raw string data
         const rawString = data.string();
-        const hexData = 'No hex data available'; // The Capacitor NFC plugin doesn't provide hex data directly
+        memoryDump.push(`Raw string: "${rawString}"`);
         
-        setTagTechnology('ISO 15693 (Capacitor)');
-        setRawMemoryData(`Raw String: ${rawString}\nHex Data: ${hexData}`);
+        // Try to access the underlying tag data if available
+        const tagInfo = (data as any).tag || (data as any).nfcTag || data;
+        console.log("Tag info object:", tagInfo);
         
-        // Analyze the hex data for memory blocks
-        const memoryAnalysis = analyzeHexData(hexData);
-        setMemoryBlocks(memoryAnalysis);
+        if (tagInfo) {
+          // Look for any available properties that might contain memory data
+          Object.keys(tagInfo).forEach(key => {
+            const value = tagInfo[key];
+            if (value && typeof value !== 'function') {
+              console.log(`Tag property ${key}:`, value);
+              
+              // Check for array data that might be memory blocks
+              if (Array.isArray(value)) {
+                if (value.length > 0 && typeof value[0] === 'number') {
+                  // Looks like byte array
+                  const hexString = value.map(b => b.toString(16).padStart(2, '0')).join(':');
+                  memoryDump.push(`${key}: ${hexString}`);
+                  
+                  // Extract readable characters
+                  const readable = value.filter(b => b >= 32 && b <= 126).map(b => String.fromCharCode(b)).join('');
+                  if (readable) {
+                    allRawData += readable;
+                  }
+                }
+              } else if (typeof value === 'string') {
+                memoryDump.push(`${key}: "${value}"`);
+                allRawData += value;
+              } else if (value instanceof ArrayBuffer || value instanceof Uint8Array) {
+                const bytes = new Uint8Array(value);
+                const hexString = Array.from(bytes).map(b => b.toString(16).padStart(2, '0')).join(':');
+                memoryDump.push(`${key} (bytes): ${hexString}`);
+                
+                // Extract readable characters
+                const readable = Array.from(bytes).filter(b => b >= 32 && b <= 126).map(b => String.fromCharCode(b)).join('');
+                if (readable) {
+                  allRawData += readable;
+                }
+              }
+            }
+          });
+        }
         
-        // Look for library patterns
-        const libraryPatterns = analyzeLibraryData(`${rawString} ${hexData}`);
+        // If we didn't find much, just analyze the raw string
+        if (memoryDump.length <= 1 && rawString) {
+          const stringData = typeof rawString === 'string' ? rawString : String(rawString);
+          const bytes = new TextEncoder().encode(stringData);
+          const hexString = Array.from(bytes).map(b => b.toString(16).padStart(2, '0')).join(':');
+          memoryDump.push(`String as bytes: ${hexString}`);
+        }
+        
+        setTagTechnology('Capacitor NFC Plugin');
+        setMemoryBlocks(memoryDump);
+        setRawMemoryData(tagInfo ? JSON.stringify(tagInfo, (key, value) => {
+          // Handle potential circular references and functions
+          if (typeof value === 'function') return '[Function]';
+          if (value instanceof Error) return value.toString();
+          return value;
+        }, 2) : 'No tag info available');
+        
+        // Analyze for library patterns
+        const libraryPatterns = analyzeLibraryData(allRawData);
         if (libraryPatterns.length > 0) {
-          setDebugInfo(`Potential library identifiers: ${libraryPatterns.join(', ')}`);
+          setDebugInfo(`Library IDs found: ${libraryPatterns.join(', ')}`);
         } else {
-          setDebugInfo('No library identifiers detected');
+          setDebugInfo(`No clear library identifiers found. Raw data analyzed: "${allRawData.substring(0, 100)}..."`);
         }
         
         toast({
-          title: "Memory Read Complete",
-          description: `Analyzed ${memoryAnalysis.length} memory sections`,
+          title: "Memory Analysis Complete",
+          description: `Found ${memoryDump.length} data sections`,
         });
       });
 
       await NFC.startScan();
-      
+
     } catch (error) {
-      console.error("Capacitor raw memory error:", error);
+      console.error("Capacitor NFC raw memory error:", error);
       throw error;
     }
   };
