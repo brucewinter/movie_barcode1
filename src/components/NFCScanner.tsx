@@ -20,6 +20,8 @@ interface MovieData {
 }
 
 const NFCScanner = () => {
+  console.log('NFCScanner component rendered');
+  
   const [isScanning, setIsScanning] = useState(false);
   const [movieData, setMovieData] = useState<MovieData | null>(null);
   const [nfcSupported, setNfcSupported] = useState<boolean>(false);
