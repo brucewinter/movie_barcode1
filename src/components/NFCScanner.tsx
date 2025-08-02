@@ -50,6 +50,24 @@ const NFCScanner = () => {
     return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
   };
 
+  const getPlatformInfo = () => {
+    const isMobile = isMobileDevice();
+    const hasWebNFC = 'NDEFReader' in window;
+    const isSecure = location.protocol === 'https:' || location.hostname === 'localhost';
+    const userAgent = navigator.userAgent;
+    
+    return {
+      isMobile,
+      hasWebNFC,
+      isSecure,
+      userAgent,
+      isAndroid: /Android/i.test(userAgent),
+      isChrome: /Chrome/i.test(userAgent),
+      isEdge: /Edg/i.test(userAgent),
+      navigatorNFC: typeof (navigator as any).nfc
+    };
+  };
+
   const checkNFCSupport = async () => {
     try {
       const isMobile = isMobileDevice();
@@ -903,7 +921,7 @@ const NFCScanner = () => {
       </div>
 
       {/* Platform Status */}
-      <div className="flex justify-center">
+      <div className="flex justify-center mb-4">
         <Badge variant={Capacitor.isNativePlatform() || isMobileDevice() ? "default" : "secondary"}>
           {Capacitor.isNativePlatform() ? 
             `Native Platform (${Capacitor.getPlatform()})` : 
@@ -913,6 +931,23 @@ const NFCScanner = () => {
           }
         </Badge>
       </div>
+
+      {/* Debug Info - Visible on screen */}
+      <Card className="max-w-md mx-auto bg-destructive/10 border-destructive/20">
+        <CardContent className="p-4">
+          <h3 className="font-semibold mb-2">Debug Status:</h3>
+          <div className="text-xs space-y-1">
+            <div>✅ Component Rendered: Yes</div>
+            <div>📱 Platform: {getPlatformInfo().isMobile ? 'Mobile' : 'Desktop'}</div>
+            <div>🌐 Browser: {getPlatformInfo().isChrome ? 'Chrome' : getPlatformInfo().isEdge ? 'Edge' : 'Other'}</div>
+            <div>🔒 HTTPS: {getPlatformInfo().isSecure ? 'Yes' : 'No'}</div>
+            <div>📡 NFC Supported: {nfcSupported ? 'Yes' : 'No'}</div>
+            <div>🔧 Navigator.nfc: {getPlatformInfo().navigatorNFC}</div>
+            <div>🎯 NDEFReader: {'NDEFReader' in window ? 'Available' : 'Not Available'}</div>
+            <div>📟 User Agent: {navigator.userAgent.substring(0, 50)}...</div>
+          </div>
+        </CardContent>
+      </Card>
 
       {/* API Key Input */}
       {(showApiKeyInput || !apiKey) && (
