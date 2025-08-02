@@ -306,87 +306,141 @@ const NFCScanner = () => {
         description: "Hold device near tag to read memory blocks...",
       });
 
-      // Use the standard onRead method with enhanced logging
+      // Use the enhanced onRead method to get all available data
       await NFC.onRead(async (data: NDEFMessagesTransformable) => {
-        console.log("Capacitor NFC raw data:", data);
+        console.log("Capacitor NFC full data object:", data);
         
         let memoryDump = [];
         let allRawData = '';
         
-        // Extract the raw string data
-        const rawString = data.string();
-        memoryDump.push(`Raw string: "${rawString}"`);
+        // Get the raw tag object - this contains the actual memory data
+        const tagData = (data as any).tag || (data as any).nfcTag || (data as any);
+        console.log("Full tag data structure:", JSON.stringify(tagData, null, 2));
         
-        // Try to access the underlying tag data if available
-        const tagInfo = (data as any).tag || (data as any).nfcTag || data;
-        console.log("Tag info object:", tagInfo);
+        // Extract serial/UID
+        if (tagData.id || tagData.uid || tagData.identifier) {
+          const id = tagData.id || tagData.uid || tagData.identifier;
+          const idArray = Array.isArray(id) ? id : [id];
+          const hexId = idArray.map(b => b.toString(16).padStart(2, '0')).join(':');
+          memoryDump.push(`Tag ID/UID: ${hexId}`);
+        }
         
-        if (tagInfo) {
-          // Look for any available properties that might contain memory data
-          Object.keys(tagInfo).forEach(key => {
-            const value = tagInfo[key];
-            if (value && typeof value !== 'function') {
-              console.log(`Tag property ${key}:`, value);
+        // Look for memory blocks or sectors
+        if (tagData.blocks) {
+          tagData.blocks.forEach((block: any, index: number) => {
+            if (Array.isArray(block)) {
+              const hexBlock = block.map(b => b.toString(16).padStart(2, '0')).join(' ');
+              const ascii = block.map(b => (b >= 32 && b <= 126) ? String.fromCharCode(b) : '.').join('');
+              memoryDump.push(`Block ${index}: ${hexBlock} | ${ascii}`);
               
-              // Check for array data that might be memory blocks
-              if (Array.isArray(value)) {
-                if (value.length > 0 && typeof value[0] === 'number') {
-                  // Looks like byte array
-                  const hexString = value.map(b => b.toString(16).padStart(2, '0')).join(':');
-                  memoryDump.push(`${key}: ${hexString}`);
-                  
-                  // Extract readable characters
-                  const readable = value.filter(b => b >= 32 && b <= 126).map(b => String.fromCharCode(b)).join('');
-                  if (readable) {
-                    allRawData += readable;
-                  }
-                }
-              } else if (typeof value === 'string') {
-                memoryDump.push(`${key}: "${value}"`);
-                allRawData += value;
-              } else if (value instanceof ArrayBuffer || value instanceof Uint8Array) {
-                const bytes = new Uint8Array(value);
-                const hexString = Array.from(bytes).map(b => b.toString(16).padStart(2, '0')).join(':');
-                memoryDump.push(`${key} (bytes): ${hexString}`);
-                
-                // Extract readable characters
-                const readable = Array.from(bytes).filter(b => b >= 32 && b <= 126).map(b => String.fromCharCode(b)).join('');
-                if (readable) {
-                  allRawData += readable;
-                }
-              }
+              // Extract readable text
+              const readable = block.filter(b => b >= 32 && b <= 126).map(b => String.fromCharCode(b)).join('');
+              if (readable.length > 1) allRawData += readable + ' ';
             }
           });
         }
         
-        // If we didn't find much, just analyze the raw string
-        if (memoryDump.length <= 1 && rawString) {
-          const stringData = typeof rawString === 'string' ? rawString : String(rawString);
-          const bytes = new TextEncoder().encode(stringData);
-          const hexString = Array.from(bytes).map(b => b.toString(16).padStart(2, '0')).join(':');
-          memoryDump.push(`String as bytes: ${hexString}`);
+        // Look for memory sectors (ISO 15693 cards)
+        if (tagData.sectors || tagData.memory) {
+          const sectors = tagData.sectors || tagData.memory;
+          if (Array.isArray(sectors)) {
+            sectors.forEach((sector: any, index: number) => {
+              if (Array.isArray(sector)) {
+                const hexSector = sector.map(b => b.toString(16).padStart(2, '0')).join(' ');
+                const ascii = sector.map(b => (b >= 32 && b <= 126) ? String.fromCharCode(b) : '.').join('');
+                memoryDump.push(`Sector ${index}: ${hexSector} | ${ascii}`);
+                
+                const readable = sector.filter(b => b >= 32 && b <= 126).map(b => String.fromCharCode(b)).join('');
+                if (readable.length > 1) allRawData += readable + ' ';
+              }
+            });
+          }
         }
         
-        setTagTechnology('Capacitor NFC Plugin');
-        setMemoryBlocks(memoryDump);
-        setRawMemoryData(tagInfo ? JSON.stringify(tagInfo, (key, value) => {
-          // Handle potential circular references and functions
+        // Look for raw memory data in various possible properties
+        const memoryProperties = ['memory', 'data', 'bytes', 'content', 'payload', 'rawData'];
+        memoryProperties.forEach(prop => {
+          if (tagData[prop] && Array.isArray(tagData[prop])) {
+            const memData = tagData[prop];
+            const hexData = memData.map(b => b.toString(16).padStart(2, '0')).join(' ');
+            const ascii = memData.map(b => (b >= 32 && b <= 126) ? String.fromCharCode(b) : '.').join('');
+            memoryDump.push(`${prop}: ${hexData} | ${ascii}`);
+            
+            const readable = memData.filter(b => b >= 32 && b <= 126).map(b => String.fromCharCode(b)).join('');
+            if (readable.length > 1) allRawData += readable + ' ';
+          }
+        });
+        
+        // Check for NDEF records but also try to access underlying memory
+        if (tagData.records && Array.isArray(tagData.records)) {
+          tagData.records.forEach((record: any, index: number) => {
+            if (record.data && Array.isArray(record.data)) {
+              const recData = record.data;
+              const hexData = recData.map(b => b.toString(16).padStart(2, '0')).join(' ');
+              const ascii = recData.map(b => (b >= 32 && b <= 126) ? String.fromCharCode(b) : '.').join('');
+              memoryDump.push(`NDEF Record ${index}: ${hexData} | ${ascii}`);
+              
+              const readable = recData.filter(b => b >= 32 && b <= 126).map(b => String.fromCharCode(b)).join('');
+              if (readable.length > 1) allRawData += readable + ' ';
+            }
+          });
+        }
+        
+        // Try to access technology-specific data
+        if (tagData.techList && Array.isArray(tagData.techList)) {
+          memoryDump.push(`Technologies: ${tagData.techList.join(', ')}`);
+        }
+        
+        // Check for Mifare/ISO14443 specific data
+        if (tagData.mifareClassic || tagData.iso14443) {
+          const mifareData = tagData.mifareClassic || tagData.iso14443;
+          Object.keys(mifareData).forEach(key => {
+            const value = mifareData[key];
+            if (Array.isArray(value) && value.length > 0 && typeof value[0] === 'number') {
+              const hexData = value.map(b => b.toString(16).padStart(2, '0')).join(' ');
+              const ascii = value.map(b => (b >= 32 && b <= 126) ? String.fromCharCode(b) : '.').join('');
+              memoryDump.push(`Mifare ${key}: ${hexData} | ${ascii}`);
+              
+              const readable = value.filter(b => b >= 32 && b <= 126).map(b => String.fromCharCode(b)).join('');
+              if (readable.length > 1) allRawData += readable + ' ';
+            }
+          });
+        }
+        
+        // If we still don't have much data, try to access all properties
+        if (memoryDump.length < 3) {
+          Object.keys(tagData).forEach(key => {
+            const value = tagData[key];
+            if (Array.isArray(value) && value.length > 0 && typeof value[0] === 'number') {
+              const hexData = value.slice(0, 16).map(b => b.toString(16).padStart(2, '0')).join(' ');
+              const ascii = value.slice(0, 16).map(b => (b >= 32 && b <= 126) ? String.fromCharCode(b) : '.').join('');
+              memoryDump.push(`${key}: ${hexData} | ${ascii}`);
+              
+              const readable = value.filter(b => b >= 32 && b <= 126).map(b => String.fromCharCode(b)).join('');
+              if (readable.length > 1) allRawData += readable + ' ';
+            }
+          });
+        }
+        
+        setTagTechnology(`Capacitor NFC - ${tagData.type || 'Unknown Type'}`);
+        setMemoryBlocks(memoryDump.length > 0 ? memoryDump : ['No memory blocks found - may need native app']);
+        setRawMemoryData(JSON.stringify(tagData, (key, value) => {
           if (typeof value === 'function') return '[Function]';
           if (value instanceof Error) return value.toString();
           return value;
-        }, 2) : 'No tag info available');
+        }, 2));
         
-        // Analyze for library patterns
+        // Enhanced library pattern analysis
         const libraryPatterns = analyzeLibraryData(allRawData);
         if (libraryPatterns.length > 0) {
-          setDebugInfo(`Library IDs found: ${libraryPatterns.join(', ')}`);
+          setDebugInfo(`Library IDs found: ${libraryPatterns.join(', ')}\nTotal memory sections: ${memoryDump.length}`);
         } else {
-          setDebugInfo(`No clear library identifiers found. Raw data analyzed: "${allRawData.substring(0, 100)}..."`);
+          setDebugInfo(`No library patterns found. Analyzed ${allRawData.length} chars from ${memoryDump.length} memory sections.\nSample: "${allRawData.substring(0, 100)}"`);
         }
         
         toast({
-          title: "Memory Analysis Complete",
-          description: `Found ${memoryDump.length} data sections`,
+          title: "Memory Scan Complete",
+          description: `Found ${memoryDump.length} memory sections`,
         });
       });
 
