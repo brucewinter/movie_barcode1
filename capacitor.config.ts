@@ -12,6 +12,12 @@ const config: CapacitorConfig = {
     Nfc: {
       class: 'NfcPlugin'
     }
+  },
+  android: {
+    permissions: [
+      'android.permission.NFC',
+      'android.permission.NFC_TRANSACTION_EVENT'
+    ]
   }
 };
 
