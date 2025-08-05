@@ -184,6 +184,13 @@ const NFCScanner = () => {
       return;
     }
 
+    // Development mode for testing without real NFC
+    const isDevelopment = !Capacitor.isNativePlatform() || location.hostname === 'localhost';
+    if (isDevelopment) {
+      mockNFCRead();
+      return;
+    }
+
     setIsScanning(true);
     setDebugInfo('');
     setRawMemoryData('');
@@ -959,6 +966,44 @@ const NFCScanner = () => {
       title: "API Key Saved",
       description: "Your OMDB API key has been saved locally",
     });
+  };
+
+  const mockNFCRead = () => {
+    setIsScanning(true);
+    setDebugInfo('');
+    setRawMemoryData('');
+    setMemoryBlocks([]);
+    setTagTechnology('');
+
+    toast({
+      title: "Development Mode",
+      description: "Simulating NFC tag read...",
+    });
+
+    setTimeout(() => {
+      // Simulate NFC tag with library barcode data
+      const mockMemoryBlocks = [
+        'Block 0: 04 14 9A 12 | ....',
+        'Block 1: 56 48 33 32 | VH32',
+        'Block 2: 31 30 30 30 | 1000',
+        'Block 3: FF FF FF FF | ....',
+        'Serial bytes: [4,20,154,18]',
+        'Serial ASCII: "....."',
+        'NDEF Record 0: 74 74 30 34 36 38 35 36 39 | tt0468569'
+      ];
+      
+      setMemoryBlocks(mockMemoryBlocks);
+      setTagTechnology('Mock NFC Tag - ISO 14443');
+      setRawMemoryData('Development simulation data\nSerial: 04:14:9A:12\nNDEF: tt0468569');
+      setDebugInfo('Library IDs found: VH321000, tt0468569\nTotal memory sections: 7');
+      
+      toast({
+        title: "Mock Scan Complete",
+        description: "Found simulated library data",
+      });
+      
+      setIsScanning(false);
+    }, 2000);
   };
 
   return (
