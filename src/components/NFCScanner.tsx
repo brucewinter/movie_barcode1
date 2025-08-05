@@ -301,6 +301,9 @@ const NFCScanner = () => {
         throw new Error("NFC not supported on this device");
       }
 
+      // Note: NFC permissions are automatically requested when using NFC.startScan()
+      console.log('Preparing to start NFC scan - permissions will be requested automatically');
+
       toast({
         title: "Reading Raw Memory",
         description: "Hold device near tag to read memory blocks...",
@@ -445,9 +448,11 @@ const NFCScanner = () => {
       });
 
       await NFC.startScan();
+      console.log('Capacitor NFC raw memory scan started successfully');
 
     } catch (error) {
       console.error("Capacitor NFC raw memory error:", error);
+      console.log('Error details:', JSON.stringify(error, null, 2));
       throw error;
     }
   };
