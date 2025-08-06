@@ -60,7 +60,6 @@ const NFCScanner: React.FC = () => {
 
       if (isAvailable.supported) {
         console.log('NFC is supported, assuming enabled for now');
-        // Since isEnabled doesn't exist, we'll assume it's enabled if supported
         setNfcEnabled(true);
       } else {
         console.log('NFC not available on this device');
@@ -110,15 +109,16 @@ const NFCScanner: React.FC = () => {
       setMemoryBlocks([]);
       setTagTechnology('');
 
+      // Add listener for NFC tag events
+      console.log('Adding NFC listener...');
+      const listener = await NFC.addListener('nfcTagScanned', (tag: any) => {
+        console.log('NFC Tag scanned via listener:', tag);
+        handleNFCTag(tag);
+      });
+
       console.log('Starting NFC scan...');
-      const result = await NFC.startScan();
-      console.log('NFC scan result:', result);
-      
-      // Handle the tag data directly from the scan result
-      if (result && result.tag) {
-        console.log('NFC Tag found in result:', result.tag);
-        handleNFCTag(result.tag);
-      }
+      await NFC.startScan();
+      console.log('NFC scan started successfully');
       
       toast({
         title: "Scanning Started",
@@ -147,8 +147,8 @@ const NFCScanner: React.FC = () => {
     console.log('=== Stopping NFC scan ===');
     try {
       if (Capacitor.isNativePlatform()) {
-        // Stop the NFC scan
-        await NFC.stopScan();
+        // Remove all NFC listeners and stop scanning
+        await NFC.removeAllListeners();
       }
       setIsScanning(false);
       toast({
