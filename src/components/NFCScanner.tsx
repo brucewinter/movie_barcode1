@@ -1,4 +1,3 @@
-
 console.log('=== NFCScanner.tsx LOADING ===');
 import React, { useState, useEffect } from 'react';
 import { Capacitor } from '@capacitor/core';
@@ -60,20 +59,12 @@ const NFCScanner: React.FC = () => {
       setNfcAvailable(isAvailable.supported);
 
       if (isAvailable.supported) {
-        console.log('Checking if NFC is enabled...');
-        const isEnabled = await NFC.isEnabled();
-        console.log('NFC enabled result:', isEnabled);
-        setNfcEnabled(isEnabled.enabled);
-        
-        if (!isEnabled.enabled) {
-          toast({
-            title: "NFC Disabled",
-            description: "Please enable NFC in your device settings",
-            variant: "destructive"
-          });
-        }
+        console.log('NFC is supported, assuming enabled for now');
+        // Since isEnabled doesn't exist, we'll assume it's enabled if supported
+        setNfcEnabled(true);
       } else {
         console.log('NFC not available on this device');
+        setNfcEnabled(false);
         toast({
           title: "NFC Not Available",
           description: "NFC functionality is not available on this device",
@@ -119,8 +110,15 @@ const NFCScanner: React.FC = () => {
       setMemoryBlocks([]);
       setTagTechnology('');
 
-      const result = await NFC.startScan();
-      console.log('NFC scan started:', result);
+      // Add listener for NFC tag events
+      const listener = await NFC.addListener('nfcTagScanned', (tag: any) => {
+        console.log('NFC Tag scanned:', tag);
+        handleNFCTag(tag);
+      });
+
+      console.log('NFC listener added, starting scan...');
+      await NFC.startScan();
+      console.log('NFC scan started successfully');
       
       toast({
         title: "Scanning Started",
@@ -149,7 +147,8 @@ const NFCScanner: React.FC = () => {
     console.log('=== Stopping NFC scan ===');
     try {
       if (Capacitor.isNativePlatform()) {
-        await NFC.stopScan();
+        // Remove all NFC listeners
+        await NFC.removeAllListeners();
       }
       setIsScanning(false);
       toast({
