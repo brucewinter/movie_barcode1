@@ -1,7 +1,8 @@
+
 console.log('=== NFCScanner.tsx LOADING ===');
 import React, { useState, useEffect } from 'react';
 import { Capacitor } from '@capacitor/core';
-import { NFC, NfcTag, NdefMessage } from '@exxili/capacitor-nfc';
+import { NFC } from '@exxili/capacitor-nfc';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -53,12 +54,12 @@ const NFCScanner: React.FC = () => {
       }
 
       console.log('Checking if NFC is available...');
-      const isAvailable = await NFC.isAvailable();
+      const isAvailable = await NFC.isSupported();
       console.log('NFC availability result:', isAvailable);
       
-      setNfcAvailable(isAvailable.available);
+      setNfcAvailable(isAvailable.supported);
 
-      if (isAvailable.available) {
+      if (isAvailable.supported) {
         console.log('Checking if NFC is enabled...');
         const isEnabled = await NFC.isEnabled();
         console.log('NFC enabled result:', isEnabled);
@@ -118,12 +119,8 @@ const NFCScanner: React.FC = () => {
       setMemoryBlocks([]);
       setTagTechnology('');
 
-      const result = await NFC.addListener('nfcTagScanned', (tag: NfcTag) => {
-        console.log('NFC Tag scanned:', tag);
-        handleNFCTag(tag);
-      });
-
-      console.log('NFC listener added successfully');
+      const result = await NFC.startScan();
+      console.log('NFC scan started:', result);
       
       toast({
         title: "Scanning Started",
@@ -152,7 +149,7 @@ const NFCScanner: React.FC = () => {
     console.log('=== Stopping NFC scan ===');
     try {
       if (Capacitor.isNativePlatform()) {
-        await NFC.removeAllListeners();
+        await NFC.stopScan();
       }
       setIsScanning(false);
       toast({
@@ -169,7 +166,7 @@ const NFCScanner: React.FC = () => {
     }
   };
 
-  const handleNFCTag = (tag: NfcTag) => {
+  const handleNFCTag = (tag: any) => {
     console.log('=== Handling NFC tag ===');
     stopScanning();
     setTagTechnology(tag.techList ? tag.techList.join(', ') : 'Unknown');
@@ -193,10 +190,10 @@ const NFCScanner: React.FC = () => {
     }
   };
 
-  const decodeNdefMessage = (ndefMessage: NdefMessage): string => {
+  const decodeNdefMessage = (ndefMessage: any): string => {
     console.log('=== Decoding NDEF message ===');
     let decoded = '';
-    ndefMessage.records.forEach((record, index) => {
+    ndefMessage.records.forEach((record: any, index: number) => {
       decoded += `Record ${index}:\n`;
       decoded += `  Type: ${bytesToString(record.type)}\n`;
       decoded += `  Payload: ${bytesToString(record.payload)}\n`;
@@ -219,7 +216,7 @@ const NFCScanner: React.FC = () => {
     return Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join(':');
   };
 
-  const readNFCMemory = (tag: NfcTag): string[] => {
+  const readNFCMemory = (tag: any): string[] => {
     console.log('=== Reading NFC memory ===');
     const memoryBlocks = [];
     const blockSize = 4; // Most NFC tags have a block size of 4 bytes
@@ -333,7 +330,7 @@ const NFCScanner: React.FC = () => {
           <Separator />
 
           <div className="flex items-center space-x-2">
-            <Badge variant={nfcAvailable ? "success" : "destructive"}>
+            <Badge variant={nfcAvailable ? "default" : "destructive"}>
               {nfcAvailable ? (
                 <>
                   <CheckCircle2 className="mr-2 h-4 w-4" /> NFC Available
@@ -345,7 +342,7 @@ const NFCScanner: React.FC = () => {
               )}
             </Badge>
 
-            <Badge variant={nfcEnabled ? "success" : "destructive"}>
+            <Badge variant={nfcEnabled ? "default" : "destructive"}>
               {nfcEnabled ? (
                 <>
                   <Wifi className="mr-2 h-4 w-4" /> NFC Enabled
