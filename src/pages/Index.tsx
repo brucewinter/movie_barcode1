@@ -140,16 +140,18 @@ const Index = () => {
 
       <div className="text-center text-sm text-muted-foreground space-y-2">
         <p>Scan barcodes with your camera or enter them manually above</p>
-        <div className="bg-blue-50 p-3 rounded-lg">
-          <p className="text-blue-800 font-medium">Setup Required:</p>
-          <p className="text-blue-700 text-xs">
-            To get real movie data, add your TMDb API key in Supabase Edge Function Secrets.
-            Get a free key at <a href="https://www.themoviedb.org/settings/api" target="_blank" className="underline">themoviedb.org</a>
-          </p>
-          <p className="text-blue-700 text-xs mt-1">
-            In Supabase dashboard → Edge Functions → Secrets, add: <code>TMDB_API_KEY</code>
-          </p>
-        </div>
+        {movieInfo?.source === 'barcode_only' && (
+          <div className="bg-blue-50 p-3 rounded-lg">
+            <p className="text-blue-800 font-medium">Setup Required:</p>
+            <p className="text-blue-700 text-xs">
+              To get real movie data, add your TMDb API key in Supabase Edge Function Secrets.
+              Get a free key at <a href="https://www.themoviedb.org/settings/api" target="_blank" className="underline">themoviedb.org</a>
+            </p>
+            <p className="text-blue-700 text-xs mt-1">
+              In Supabase dashboard → Edge Functions → Secrets, add: <code>TMDB_API_KEY</code>
+            </p>
+          </div>
+        )}
       </div>
     </div>
   );
