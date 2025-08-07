@@ -22,17 +22,13 @@ const LazyNFCScanner: React.FC = () => {
     console.log('=== Loading NFC Scanner component ===');
     setIsLoading(true);
     try {
-      // Dynamically import the actual NFC scanner component
-      const { default: NFCScannerComponent } = await import('./NFCScanner');
-      setNFCScanner(() => NFCScannerComponent);
-      console.log('=== NFC Scanner component loaded successfully ===');
-    } catch (error) {
-      console.error('Error loading NFC Scanner:', error);
       toast({
-        title: "Loading Error",
-        description: `Could not load NFC scanner: ${error}`,
+        title: "NFC Not Available",
+        description: "NFC functionality temporarily disabled for testing",
         variant: "destructive"
       });
+    } catch (error) {
+      console.error('Error loading NFC Scanner:', error);
     } finally {
       setIsLoading(false);
     }
