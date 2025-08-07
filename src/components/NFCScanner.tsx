@@ -31,7 +31,13 @@ const NFCScanner: React.FC = () => {
       console.log('Platform check - isNative:', Capacitor.isNativePlatform());
       console.log('Platform info:', Capacitor.getPlatform());
       
-      checkNFCAvailability();
+      // Only check availability, don't auto-initialize NFC
+      if (Capacitor.isNativePlatform()) {
+        checkNFCAvailability();
+      } else {
+        setNfcAvailable(false);
+        setNfcEnabled(false);
+      }
     } catch (error) {
       console.error('Error in useEffect:', error);
       toast({
@@ -45,13 +51,6 @@ const NFCScanner: React.FC = () => {
   const checkNFCAvailability = async () => {
     console.log('=== Checking NFC availability ===');
     try {
-      if (!Capacitor.isNativePlatform()) {
-        console.log('Not on native platform, using development mode');
-        setNfcAvailable(false);
-        setNfcEnabled(false);
-        return;
-      }
-
       console.log('Checking if NFC is available...');
       const isAvailable = await NFC.isSupported();
       console.log('NFC availability result:', isAvailable);
@@ -59,7 +58,7 @@ const NFCScanner: React.FC = () => {
       setNfcAvailable(isAvailable.supported);
 
       if (isAvailable.supported) {
-        console.log('NFC is supported, assuming enabled for now');
+        console.log('NFC is supported');
         setNfcEnabled(true);
       } else {
         console.log('NFC not available on this device');
