@@ -4,35 +4,43 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Film, Search } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import CameraScanner from '@/components/CameraScanner';
 
 const Index = () => {
   const [barcode, setBarcode] = React.useState('');
   const [movieInfo, setMovieInfo] = React.useState<any>(null);
   const { toast } = useToast();
 
-  const handleManualSearch = () => {
-    if (!barcode.trim()) {
+  const handleBarcodeFound = (scannedBarcode: string) => {
+    if (!scannedBarcode.trim()) {
       toast({
         title: "Error",
-        description: "Please enter a barcode",
+        description: "Invalid barcode",
         variant: "destructive",
       });
       return;
     }
 
     // Demo movie lookup
-    setMovieInfo({
-      barcode: barcode.trim(),
+    const movieData = {
+      barcode: scannedBarcode.trim(),
       title: 'Demo Movie Title',
       year: '2024',
       director: 'Demo Director',
       rating: '8.5/10'
-    });
+    };
+
+    setMovieInfo(movieData);
+    setBarcode(scannedBarcode.trim());
 
     toast({
       title: "Movie Found!",
-      description: `Found movie for barcode: ${barcode.trim()}`,
+      description: `Found movie for barcode: ${scannedBarcode.trim()}`,
     });
+  };
+
+  const handleManualSearch = () => {
+    handleBarcodeFound(barcode);
   };
 
   return (
@@ -43,9 +51,11 @@ const Index = () => {
           Flicks Finder
         </h1>
         <p className="text-muted-foreground">
-          Enter a movie barcode to get information
+          Scan or enter a movie barcode to get information
         </p>
       </div>
+
+      <CameraScanner onScan={handleBarcodeFound} />
 
       <Card>
         <CardHeader>
@@ -99,7 +109,7 @@ const Index = () => {
       )}
 
       <div className="text-center text-sm text-muted-foreground">
-        App is working! Camera scanning can be added later.
+        Scan barcodes with your camera or enter them manually above
       </div>
     </div>
   );
