@@ -31,10 +31,14 @@ const NFCScanner: React.FC = () => {
       console.log('Platform check - isNative:', Capacitor.isNativePlatform());
       console.log('Platform info:', Capacitor.getPlatform());
       
-      // Only check availability, don't auto-initialize NFC
+      // Don't make any NFC calls on startup to avoid permission issues
+      // We'll check availability only when user tries to scan
       if (Capacitor.isNativePlatform()) {
-        checkNFCAvailability();
+        console.log('Running on native platform - NFC will be checked when scanning starts');
+        setNfcAvailable(true); // Assume available, will check during scan
+        setNfcEnabled(true);
       } else {
+        console.log('Running in development mode - NFC not available');
         setNfcAvailable(false);
         setNfcEnabled(false);
       }
@@ -90,16 +94,6 @@ const NFCScanner: React.FC = () => {
       return;
     }
 
-    if (!nfcAvailable) {
-      console.log('NFC not available');
-      toast({
-        title: "NFC Not Available",
-        description: "NFC functionality is not available on this device",
-        variant: "destructive"
-      });
-      return;
-    }
-
     try {
       console.log('Attempting to start NFC scan...');
       setIsScanning(true);
@@ -107,6 +101,27 @@ const NFCScanner: React.FC = () => {
       setRawMemoryData('');
       setMemoryBlocks([]);
       setTagTechnology('');
+
+      // Check NFC availability now (when user explicitly requests it)
+      console.log('Checking NFC availability...');
+      const isAvailable = await NFC.isSupported();
+      console.log('NFC availability result:', isAvailable);
+      
+      if (!isAvailable.supported) {
+        setNfcAvailable(false);
+        setNfcEnabled(false);
+        setIsScanning(false);
+        toast({
+          title: "NFC Not Available",
+          description: "NFC functionality is not available on this device",
+          variant: "destructive"
+        });
+        return;
+      }
+
+      // Update states since NFC is available
+      setNfcAvailable(true);
+      setNfcEnabled(true);
 
       // Add listener for NFC tag events
       console.log('Adding NFC read listener...');
@@ -129,7 +144,6 @@ const NFCScanner: React.FC = () => {
       console.log('Starting NFC scan...');
       await NFC.startScan();
       console.log('NFC scan started successfully');
-      console.log('NFC scan started successfully');
       
       toast({
         title: "Scanning Started",
@@ -146,11 +160,23 @@ const NFCScanner: React.FC = () => {
     } catch (error) {
       console.error('Error starting NFC scan:', error);
       setIsScanning(false);
-      toast({
-        title: "Scan Failed",
-        description: `Could not start NFC scanning: ${error}`,
-        variant: "destructive"
-      });
+      
+      // If it's a permission error, update the UI to reflect that
+      if (error.toString().includes('permission') || error.toString().includes('Permission')) {
+        setNfcAvailable(false);
+        setNfcEnabled(false);
+        toast({
+          title: "NFC Permission Required",
+          description: "Please grant NFC permission to use this feature",
+          variant: "destructive"
+        });
+      } else {
+        toast({
+          title: "Scan Failed",
+          description: `Could not start NFC scanning: ${error}`,
+          variant: "destructive"
+        });
+      }
     }
   };
 
