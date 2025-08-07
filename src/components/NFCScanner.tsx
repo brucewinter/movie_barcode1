@@ -110,14 +110,26 @@ const NFCScanner: React.FC = () => {
       setTagTechnology('');
 
       // Add listener for NFC tag events
-      console.log('Adding NFC listener...');
-      const listener = await NFC.addListener('nfcTagScanned', (tag: any) => {
-        console.log('NFC Tag scanned via listener:', tag);
-        handleNFCTag(tag);
+      console.log('Adding NFC read listener...');
+      NFC.onRead((data: any) => {
+        console.log('NFC Tag scanned via onRead:', data);
+        handleNFCData(data);
+      });
+
+      // Add error listener
+      NFC.onError((error: any) => {
+        console.error('NFC Error:', error);
+        toast({
+          title: "NFC Error",
+          description: `NFC Error: ${error.error || error}`,
+          variant: "destructive"
+        });
+        setIsScanning(false);
       });
 
       console.log('Starting NFC scan...');
       await NFC.startScan();
+      console.log('NFC scan started successfully');
       console.log('NFC scan started successfully');
       
       toast({
@@ -147,8 +159,8 @@ const NFCScanner: React.FC = () => {
     console.log('=== Stopping NFC scan ===');
     try {
       if (Capacitor.isNativePlatform()) {
-        // Remove all NFC listeners and stop scanning
-        await NFC.removeAllListeners();
+        // No explicit stop method needed, just remove listeners
+        console.log('Stopping NFC scan...');
       }
       setIsScanning(false);
       toast({
@@ -165,8 +177,64 @@ const NFCScanner: React.FC = () => {
     }
   };
 
+  const handleNFCData = (data: any) => {
+    console.log('=== Handling NFC data ===');
+    stopScanning();
+    
+    try {
+      // Get the string representation of the data
+      const messages = data.string();
+      console.log('NFC Messages:', messages);
+      
+      setTagTechnology('NDEF Compatible');
+      
+      if (messages && messages.messages) {
+        let rawData = '';
+        let debugInfo = '';
+        const blocks = [];
+        
+        messages.messages.forEach((message: any, msgIndex: number) => {
+          if (message.records) {
+            message.records.forEach((record: any, recIndex: number) => {
+              rawData += `Message ${msgIndex}, Record ${recIndex}:\n`;
+              rawData += `  Type: ${record.type || 'Unknown'}\n`;
+              rawData += `  Payload: ${record.payload || 'No payload'}\n\n`;
+              
+              blocks.push(`Record ${recIndex}: Type=${record.type}, Data=${record.payload}`);
+            });
+          }
+        });
+        
+        setRawMemoryData(rawData);
+        setMemoryBlocks(blocks);
+        setDebugInfo(`Found ${messages.messages.length} message(s)`);
+      } else {
+        setRawMemoryData('No NDEF data found');
+        setMemoryBlocks(['No NDEF records']);
+        setDebugInfo('No valid NDEF messages');
+      }
+      
+      toast({
+        title: "NFC Tag Read",
+        description: "Successfully read NFC tag data",
+      });
+      
+    } catch (error) {
+      console.error('Error processing NFC data:', error);
+      setRawMemoryData(`Error: ${error}`);
+      setMemoryBlocks(['Error reading data']);
+      setDebugInfo('Processing error occurred');
+      
+      toast({
+        title: "Processing Error",
+        description: `Error processing NFC data: ${error}`,
+        variant: "destructive"
+      });
+    }
+  };
+
   const handleNFCTag = (tag: any) => {
-    console.log('=== Handling NFC tag ===');
+    console.log('=== Handling NFC tag (legacy) ===');
     stopScanning();
     setTagTechnology(tag.techList ? tag.techList.join(', ') : 'Unknown');
 
