@@ -9,7 +9,7 @@ const config: CapacitorConfig = {
     cleartext: true
   },
   plugins: {
-    // Explicitly disable any plugins that might auto-initialize
+    // Disable all auto-initializing plugins
   },
 };
 
