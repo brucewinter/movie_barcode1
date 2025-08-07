@@ -1,7 +1,6 @@
 console.log('=== NFCScanner.tsx LOADING ===');
 import React, { useState, useEffect } from 'react';
 import { Capacitor } from '@capacitor/core';
-import { NFC } from '@exxili/capacitor-nfc';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -56,6 +55,10 @@ const NFCScanner: React.FC = () => {
     console.log('=== Checking NFC availability ===');
     try {
       console.log('Checking if NFC is available...');
+      
+      // Dynamically import NFC to avoid initialization on startup
+      const { NFC } = await import('@exxili/capacitor-nfc');
+      
       const isAvailable = await NFC.isSupported();
       console.log('NFC availability result:', isAvailable);
       
@@ -104,6 +107,10 @@ const NFCScanner: React.FC = () => {
 
       // Check NFC availability now (when user explicitly requests it)
       console.log('Checking NFC availability...');
+      
+      // Dynamically import NFC to avoid initialization on startup
+      const { NFC } = await import('@exxili/capacitor-nfc');
+      
       const isAvailable = await NFC.isSupported();
       console.log('NFC availability result:', isAvailable);
       
