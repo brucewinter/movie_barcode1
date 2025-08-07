@@ -37,13 +37,14 @@
 
     <!-- Permissions -->
     <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.CAMERA" />
     
-    <!-- Explicitly disable NFC features -->
+    <!-- Camera feature for barcode scanning -->
     <uses-feature 
-        android:name="android.hardware.nfc" 
-        android:required="false" />
+        android:name="android.hardware.camera" 
+        android:required="true" />
     <uses-feature 
-        android:name="android.hardware.nfc.hce" 
+        android:name="android.hardware.camera.autofocus" 
         android:required="false" />
 
 </manifest>
