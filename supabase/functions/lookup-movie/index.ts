@@ -56,6 +56,8 @@ serve(async (req) => {
 
     // Use The Movie Database API (free tier)
     const tmdbApiKey = Deno.env.get('TMDB_API_KEY')
+    console.log('TMDB API Key status:', tmdbApiKey ? 'Found' : 'Not found')
+    
     if (!tmdbApiKey) {
       return new Response(
         JSON.stringify({ 
