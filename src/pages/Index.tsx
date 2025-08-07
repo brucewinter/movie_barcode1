@@ -116,8 +116,18 @@ const Index = () => {
               <span className="font-medium">Director:</span> {movieInfo.director}
             </div>
             <div>
-              <span className="font-medium">Rating:</span> {movieInfo.rating}
+              <span className="font-medium">TMDb Rating:</span> {movieInfo.rating}
             </div>
+            {movieInfo.imdbRating && movieInfo.imdbRating !== 'N/A' && (
+              <div>
+                <span className="font-medium">IMDB Rating:</span> {movieInfo.imdbRating}
+              </div>
+            )}
+            {movieInfo.rottenTomatoesRating && movieInfo.rottenTomatoesRating !== 'N/A' && (
+              <div>
+                <span className="font-medium">Rotten Tomatoes:</span> {movieInfo.rottenTomatoesRating}
+              </div>
+            )}
             {movieInfo.runtime && (
               <div>
                 <span className="font-medium">Runtime:</span> {movieInfo.runtime}

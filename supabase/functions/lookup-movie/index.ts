@@ -56,7 +56,9 @@ serve(async (req) => {
 
     // Use The Movie Database API (free tier)
     const tmdbApiKey = Deno.env.get('TMDB_API_KEY')
+    const omdbApiKey = Deno.env.get('OMDB_API_KEY')
     console.log('TMDB API Key status:', tmdbApiKey ? 'Found' : 'Not found')
+    console.log('OMDB API Key status:', omdbApiKey ? 'Found' : 'Not found')
     
     if (!tmdbApiKey) {
       return new Response(
@@ -98,6 +100,31 @@ serve(async (req) => {
         const details = await detailsResponse.json()
         const director = details.credits?.crew?.find((person: any) => person.job === 'Director')?.name || 'Unknown'
 
+        // Get additional ratings from OMDB if API key is available
+        let imdbRating = 'N/A'
+        let rottenTomatoesRating = 'N/A'
+        
+        if (omdbApiKey) {
+          try {
+            const omdbResponse = await fetch(
+              `https://www.omdbapi.com/?apikey=${omdbApiKey}&t=${encodeURIComponent(details.title)}&y=${details.release_date ? new Date(details.release_date).getFullYear() : ''}`
+            )
+            
+            if (omdbResponse.ok) {
+              const omdbData = await omdbResponse.json()
+              if (omdbData.Response === 'True') {
+                imdbRating = omdbData.imdbRating !== 'N/A' ? `${omdbData.imdbRating}/10` : 'N/A'
+                
+                // Find Rotten Tomatoes rating from the Ratings array
+                const rtRating = omdbData.Ratings?.find((r: any) => r.Source === 'Rotten Tomatoes')
+                rottenTomatoesRating = rtRating ? rtRating.Value : 'N/A'
+              }
+            }
+          } catch (error) {
+            console.error('Error fetching OMDB data:', error)
+          }
+        }
+
         return new Response(
           JSON.stringify({
             barcode,
@@ -105,6 +132,8 @@ serve(async (req) => {
             year: details.release_date ? new Date(details.release_date).getFullYear().toString() : 'Unknown',
             director,
             rating: details.vote_average ? `${details.vote_average.toFixed(1)}/10` : 'N/A',
+            imdbRating,
+            rottenTomatoesRating,
             overview: details.overview || 'No overview available',
             runtime: details.runtime ? `${details.runtime} minutes` : 'Unknown',
             genres: details.genres?.map((g: any) => g.name).join(', ') || 'Unknown',
