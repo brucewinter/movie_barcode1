@@ -32,8 +32,8 @@ public class MainActivity extends Activity {
         
         setContentView(webView);
         
-        // Load the Lovable preview URL directly
-        webView.loadUrl("https://cbe2b28f-1917-4504-962f-a4fcf0f16230.lovableproject.com?forceHideBadge=true");
+        // Load the built app from local assets
+        webView.loadUrl("file:///android_asset/public/index.html");
     }
     
     @Override
