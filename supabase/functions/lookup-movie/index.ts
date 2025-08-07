@@ -1,4 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
+// Function to lookup movie information from barcode
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
