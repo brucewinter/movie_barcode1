@@ -1,9 +1,9 @@
 console.log('=== INDEX PAGE LOADING ===');
-import NFCScanner from '@/components/NFCScanner';
+import LazyNFCScanner from '@/components/LazyNFCScanner';
 
 const Index = () => {
   console.log('=== INDEX PAGE RENDERING ===');
-  return <NFCScanner />;
+  return <LazyNFCScanner />;
 };
 
 export default Index;
