@@ -1,1 +1,4 @@
 project_id = "jyaeitdvvfpwncwtvtgh"
+
+[functions.lookup-movie]
+verify_jwt = false
