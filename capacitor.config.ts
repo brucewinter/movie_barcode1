@@ -8,11 +8,6 @@ const config: CapacitorConfig = {
     url: 'https://cbe2b28f-1917-4504-962f-a4fcf0f16230.lovableproject.com?forceHideBadge=true',
     cleartext: true
   },
-  plugins: {
-    Nfc: {
-      class: 'NfcPlugin'
-    }
-  },
   android: {
     permissions: [
       'android.permission.NFC',
