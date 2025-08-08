@@ -3,6 +3,7 @@ import { Camera, CameraResultType, CameraSource } from '@capacitor/camera';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Camera as CameraIcon, RotateCcw } from 'lucide-react';
+import { BrowserMultiFormatReader } from '@zxing/library';
 
 interface CameraScannerProps {
   onScan: (result: string) => void;
@@ -35,11 +36,35 @@ const CameraScanner: React.FC<CameraScannerProps> = ({ onScan }) => {
       if (image.dataUrl) {
         setCapturedImage(image.dataUrl);
         
-        // For now, simulate a barcode scan result
-        // In a real implementation, you'd use a barcode detection library
-        // to process the captured image
-        const simulatedBarcode = '1234567890123';
-        onScan(simulatedBarcode);
+        // Scan the captured image for barcodes
+        try {
+          console.log('Starting barcode scan of captured image...');
+          const codeReader = new BrowserMultiFormatReader();
+          
+          // Create an image element from the data URL
+          const img = new Image();
+          img.onload = async () => {
+            try {
+              console.log('Image loaded, attempting to decode barcode...');
+              const result = await codeReader.decodeFromImage(img);
+              
+              console.log('Barcode found:', result.getText());
+              onScan(result.getText());
+            } catch (scanError: any) {
+              console.error('Barcode scanning failed:', scanError);
+              setError('No barcode found in the captured image. Please try again with a clearer photo.');
+            }
+          };
+          
+          img.onerror = () => {
+            setError('Failed to process the captured image. Please try again.');
+          };
+          
+          img.src = image.dataUrl;
+        } catch (scanError: any) {
+          console.error('Barcode reader initialization failed:', scanError);
+          setError('Barcode scanning not available. Please try again.');
+        }
       }
       
       setIsCapturing(false);
