@@ -19,6 +19,15 @@ const CameraScanner: React.FC<CameraScannerProps> = ({ onScan }) => {
       setError('');
       setIsScanning(true);
       
+      // First check if camera permissions are available
+      if ('mediaDevices' in navigator && 'getUserMedia' in navigator.mediaDevices) {
+        // Request camera permission explicitly
+        const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+        stream.getTracks().forEach(track => track.stop()); // Stop the test stream
+      } else {
+        throw new Error('Camera not supported on this device');
+      }
+      
       if (videoRef.current) {
         await codeReader.decodeFromVideoDevice(
           undefined,
@@ -34,9 +43,19 @@ const CameraScanner: React.FC<CameraScannerProps> = ({ onScan }) => {
           }
         );
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error('Error starting scanner:', err);
-      setError('Failed to access camera. Please check permissions.');
+      let errorMessage = 'Failed to access camera.';
+      
+      if (err.name === 'NotAllowedError') {
+        errorMessage = 'Camera permission denied. Please allow camera access in your browser settings.';
+      } else if (err.name === 'NotFoundError') {
+        errorMessage = 'No camera found on this device.';
+      } else if (err.name === 'NotSupportedError') {
+        errorMessage = 'Camera not supported on this device.';
+      }
+      
+      setError(errorMessage);
       setIsScanning(false);
     }
   };

@@ -5,6 +5,8 @@ import android.os.Bundle;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
 import android.webkit.WebSettings;
+import android.webkit.WebChromeClient;
+import android.webkit.PermissionRequest;
 
 public class MainActivity extends Activity {
     private WebView webView;
@@ -20,6 +22,7 @@ public class MainActivity extends Activity {
         webSettings.setDomStorageEnabled(true);
         webSettings.setAllowFileAccessFromFileURLs(true);
         webSettings.setAllowUniversalAccessFromFileURLs(true);
+        webSettings.setMediaPlaybackRequiresUserGesture(false);
         webSettings.setUserAgentString(webSettings.getUserAgentString() + " CapacitorAndroid");
         
         webView.setWebViewClient(new WebViewClient() {
@@ -27,6 +30,14 @@ public class MainActivity extends Activity {
             public boolean shouldOverrideUrlLoading(WebView view, String url) {
                 view.loadUrl(url);
                 return true;
+            }
+        });
+        
+        // Add WebChromeClient to handle camera permissions
+        webView.setWebChromeClient(new WebChromeClient() {
+            @Override
+            public void onPermissionRequest(PermissionRequest request) {
+                request.grant(request.getResources());
             }
         });
         
