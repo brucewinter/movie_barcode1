@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Camera, CameraResultType, CameraSource } from '@capacitor/camera';
 import { Capacitor } from '@capacitor/core';
 import { Button } from '@/components/ui/button';
@@ -13,6 +13,8 @@ const CameraScanner: React.FC<CameraScannerProps> = ({ onScan }) => {
   const [isCapturing, setIsCapturing] = useState(false);
   const [error, setError] = useState<string>('');
   const [capturedImage, setCapturedImage] = useState<string | null>(null);
+  const BUILD_TAG = 'sim-v2';
+  useEffect(() => { console.info('[CameraScanner]', BUILD_TAG, 'simulation enabled'); }, []);
 
   const takePhoto = async () => {
     try {
@@ -124,7 +126,7 @@ const CameraScanner: React.FC<CameraScannerProps> = ({ onScan }) => {
         </div>
 
         <p className="text-xs text-muted-foreground text-center">
-          Take a photo of the barcode for scanning
+          Take a photo of the barcode for scanning — Simulation mode active (sim-v2)
         </p>
       </CardContent>
     </Card>
