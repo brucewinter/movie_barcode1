@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Camera, CameraResultType, CameraSource } from '@capacitor/camera';
+import { Capacitor } from '@capacitor/core';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Camera as CameraIcon, RotateCcw } from 'lucide-react';
@@ -32,15 +33,14 @@ const CameraScanner: React.FC<CameraScannerProps> = ({ onScan }) => {
 
       console.log('Photo captured successfully');
       
-      if (image.dataUrl) {
-        setCapturedImage(image.dataUrl);
-        
-        // For now, simulate a barcode scan result
-        // In a real implementation, you'd use a barcode detection library
-        // to process the captured image
-        const simulatedBarcode = '1234567890123';
-        onScan(simulatedBarcode);
+      const preview = image.dataUrl ?? image.webPath ?? null;
+      if (preview) {
+        setCapturedImage(preview);
       }
+      
+      // Simulate a barcode scan result to keep web flow working
+      const simulatedBarcode = '1234567890123';
+      onScan(simulatedBarcode);
       
       setIsCapturing(false);
     } catch (err: any) {
