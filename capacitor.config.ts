@@ -5,8 +5,15 @@ const config: CapacitorConfig = {
   appName: 'Flicks Finder',
   webDir: 'dist',
   plugins: {
-    // Disable all plugins to prevent auto-loading issues
-  }
+    // Enable camera plugin
+    Camera: {
+      permissions: ['camera']
+    }
+  },
+  server: {
+    url: "https://cbe2b28f-1917-4504-962f-a4fcf0f16230.lovableproject.com?forceHideBadge=true",
+    cleartext: true
+  },
 };
 
 export default config;
