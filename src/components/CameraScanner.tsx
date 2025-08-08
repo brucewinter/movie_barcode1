@@ -44,7 +44,13 @@ const CameraScanner: React.FC<CameraScannerProps> = ({ onScan }) => {
       
       setIsCapturing(false);
     } catch (err: any) {
-      console.error('Camera error:', err);
+      console.error('Camera error details:', {
+        message: err.message,
+        name: err.name,
+        code: err.code,
+        stack: err.stack,
+        fullError: err
+      });
       setIsCapturing(false);
       
       let errorMessage = 'Failed to access camera. ';
