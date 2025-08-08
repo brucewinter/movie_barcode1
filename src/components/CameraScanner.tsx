@@ -20,6 +20,19 @@ const CameraScanner: React.FC<CameraScannerProps> = ({ onScan }) => {
     try {
       setError('');
       setIsCapturing(true);
+
+      // Force simulation on web to restore browser flow
+      const platform = Capacitor.getPlatform();
+      console.info('[CameraScanner] takePhoto start, platform=', platform);
+      if (platform === 'web') {
+        console.info('[CameraScanner] Web detected -> simulate barcode without invoking camera');
+        const simulatedBarcode = '1234567890123';
+        setTimeout(() => {
+          setIsCapturing(false);
+          onScan(simulatedBarcode);
+        }, 50);
+        return;
+      }
       
       console.log('Requesting camera permission through Capacitor...');
       
