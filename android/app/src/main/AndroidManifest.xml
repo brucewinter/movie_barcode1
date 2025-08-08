@@ -38,13 +38,18 @@
     <!-- Permissions -->
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.CAMERA" />
+    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="28" />
+    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32" />
     
-    <!-- Disable any hardware features that might cause permission issues -->
+    <!-- Required camera features -->
     <uses-feature 
         android:name="android.hardware.nfc" 
         android:required="false" />
     <uses-feature 
         android:name="android.hardware.camera" 
+        android:required="true" />
+    <uses-feature 
+        android:name="android.hardware.camera.autofocus" 
         android:required="false" />
 
 </manifest>

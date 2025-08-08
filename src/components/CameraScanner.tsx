@@ -1,9 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { Camera, CameraResultType, CameraSource } from '@capacitor/camera';
-import { Capacitor } from '@capacitor/core';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Camera as CameraIcon, RotateCcw } from 'lucide-react';
+import { BrowserMultiFormatReader } from '@zxing/library';
 
 interface CameraScannerProps {
   onScan: (result: string) => void;
@@ -13,26 +13,11 @@ const CameraScanner: React.FC<CameraScannerProps> = ({ onScan }) => {
   const [isCapturing, setIsCapturing] = useState(false);
   const [error, setError] = useState<string>('');
   const [capturedImage, setCapturedImage] = useState<string | null>(null);
-  const BUILD_TAG = 'sim-v2';
-  useEffect(() => { console.info('[CameraScanner]', BUILD_TAG, 'simulation enabled'); }, []);
 
   const takePhoto = async () => {
     try {
       setError('');
       setIsCapturing(true);
-
-      // Force simulation on web to restore browser flow
-      const platform = Capacitor.getPlatform();
-      console.info('[CameraScanner] takePhoto start, platform=', platform);
-      if (platform === 'web') {
-        console.info('[CameraScanner] Web detected -> simulate barcode without invoking camera');
-        const simulatedBarcode = '1234567890123';
-        setTimeout(() => {
-          setIsCapturing(false);
-          onScan(simulatedBarcode);
-        }, 50);
-        return;
-      }
       
       console.log('Requesting camera permission through Capacitor...');
       
@@ -48,18 +33,49 @@ const CameraScanner: React.FC<CameraScannerProps> = ({ onScan }) => {
 
       console.log('Photo captured successfully');
       
-      const preview = image.dataUrl ?? image.webPath ?? null;
-      if (preview) {
-        setCapturedImage(preview);
+      if (image.dataUrl) {
+        setCapturedImage(image.dataUrl);
+        
+        // Scan the captured image for barcodes
+        try {
+          console.log('Starting barcode scan of captured image...');
+          const codeReader = new BrowserMultiFormatReader();
+          
+          // Create an image element from the data URL
+          const img = new Image();
+          img.onload = async () => {
+            try {
+              console.log('Image loaded, attempting to decode barcode...');
+              const result = await codeReader.decodeFromImage(img);
+              
+              console.log('Barcode found:', result.getText());
+              onScan(result.getText());
+            } catch (scanError: any) {
+              console.error('Barcode scanning failed:', scanError);
+              setError('No barcode found in the captured image. Please try again with a clearer photo.');
+            }
+          };
+          
+          img.onerror = () => {
+            setError('Failed to process the captured image. Please try again.');
+          };
+          
+          img.src = image.dataUrl;
+        } catch (scanError: any) {
+          console.error('Barcode reader initialization failed:', scanError);
+          setError('Barcode scanning not available. Please try again.');
+        }
       }
-      
-      // Simulate a barcode scan result to keep web flow working
-      const simulatedBarcode = '1234567890123';
-      onScan(simulatedBarcode);
       
       setIsCapturing(false);
     } catch (err: any) {
-      console.error('Camera error:', err);
+      console.error('Camera error details:', {
+        message: err.message,
+        name: err.name,
+        code: err.code,
+        stack: err.stack,
+        fullError: err
+      });
       setIsCapturing(false);
       
       let errorMessage = 'Failed to access camera. ';
@@ -139,7 +155,7 @@ const CameraScanner: React.FC<CameraScannerProps> = ({ onScan }) => {
         </div>
 
         <p className="text-xs text-muted-foreground text-center">
-          Take a photo of the barcode for scanning — Simulation mode active (sim-v2)
+          Take a photo of the barcode for scanning
         </p>
       </CardContent>
     </Card>
