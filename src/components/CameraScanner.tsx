@@ -52,13 +52,61 @@ const CameraScanner: React.FC<CameraScannerProps> = ({ onScan }) => {
     }
   };
 
+  // Auto-torch brightness monitor
+  const brightnessTimerRef = useRef<number | null>(null);
+  const offscreenCanvasRef = useRef<HTMLCanvasElement | null>(null);
+
+  const startBrightnessMonitor = () => {
+    if (!offscreenCanvasRef.current) {
+      offscreenCanvasRef.current = document.createElement('canvas');
+    }
+    if (brightnessTimerRef.current) return;
+    brightnessTimerRef.current = window.setInterval(() => {
+      if (!isCapturing) return;
+      const video = videoRef.current;
+      if (!video) return;
+      const w = 160, h = 120;
+      const canvas = offscreenCanvasRef.current!;
+      canvas.width = w;
+      canvas.height = h;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) return;
+      try {
+        ctx.drawImage(video, 0, 0, w, h);
+        const { data } = ctx.getImageData(0, 0, w, h);
+        let sum = 0;
+        const step = 4 * 8; // sample every 8th pixel
+        for (let i = 0; i < data.length; i += step) {
+          const r = data[i], g = data[i+1], b = data[i+2];
+          const y = 0.2126*r + 0.7152*g + 0.0722*b; // luminance
+          sum += y;
+        }
+        const samples = Math.ceil(data.length / step);
+        const avg = sum / samples;
+        const thresholdOn = 55; // low-light threshold
+        if (avg < thresholdOn && torchSupported && !isTorchOn) {
+          setTorch(true);
+        }
+      } catch {}
+    }, 800);
+  };
+
+  const stopBrightnessMonitor = () => {
+    if (brightnessTimerRef.current) {
+      clearInterval(brightnessTimerRef.current);
+      brightnessTimerRef.current = null;
+    }
+  };
+
   useEffect(() => {
     if (isCapturing) {
       const t = setTimeout(() => {
-        checkTorchSupport();
+        const supported = checkTorchSupport();
+        if (supported) startBrightnessMonitor();
       }, 400);
       return () => clearTimeout(t);
     } else {
+      stopBrightnessMonitor();
       setIsTorchOn(false);
       setTorchSupported(false);
     }
@@ -74,6 +122,9 @@ const CameraScanner: React.FC<CameraScannerProps> = ({ onScan }) => {
     } catch (e) {
       console.warn('Error stopping live scan', e);
     } finally {
+      // Stop helpers and reset state
+      try { setTorch(false); } catch {}
+      stopBrightnessMonitor();
       setIsCapturing(false);
     }
   };
@@ -183,6 +234,14 @@ const CameraScanner: React.FC<CameraScannerProps> = ({ onScan }) => {
             muted
             playsInline
           />
+          {isCapturing && (
+            <div className="absolute inset-0 pointer-events-none flex items-center justify-center">
+              <div className="relative w-[80%] h-[60%] border-2 border-primary/60 rounded-md">
+                <div className="absolute left-1/2 top-1/2 -translate-x-1/2 w-1/2 h-px bg-primary/40" />
+                <div className="absolute left-1/2 top-1/2 -translate-y-1/2 h-1/2 w-px bg-primary/40" />
+              </div>
+            </div>
+          )}
           {!isCapturing && (
             <div className="absolute inset-0 rounded-lg bg-muted flex items-center justify-center">
               <div className="text-center">
