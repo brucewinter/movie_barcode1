@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Camera, CameraResultType, CameraSource } from '@capacitor/camera';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -14,87 +14,94 @@ const CameraScanner: React.FC<CameraScannerProps> = ({ onScan }) => {
   const [error, setError] = useState<string>('');
   const [capturedImage, setCapturedImage] = useState<string | null>(null);
 
-  const takePhoto = async () => {
-    try {
-      setError('');
-      setIsCapturing(true);
-      
-      console.log('Requesting camera permission through Capacitor...');
-      
-      const image = await Camera.getPhoto({
-        quality: 90,
-        allowEditing: false,
-        resultType: CameraResultType.DataUrl,
-        source: CameraSource.Camera,
-        promptLabelHeader: 'Scan Barcode',
-        promptLabelPhoto: 'Take Photo',
-        promptLabelPicture: 'Choose from Photos'
-      });
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+  const codeReaderRef = useRef<BrowserMultiFormatReader | null>(null);
 
-      console.log('Photo captured successfully');
-      
-      if (image.dataUrl) {
-        setCapturedImage(image.dataUrl);
-        
-        // Scan the captured image for barcodes
-        try {
-          console.log('Starting barcode scan of captured image...');
-          const codeReader = new BrowserMultiFormatReader();
-          
-          // Create an image element from the data URL
-          const img = new Image();
-          img.onload = async () => {
-            try {
-              console.log('Image loaded, attempting to decode barcode...');
-              const result = await codeReader.decodeFromImage(img);
-              
-              console.log('Barcode found:', result.getText());
-              onScan(result.getText());
-            } catch (scanError: any) {
-              console.error('Barcode scanning failed:', scanError);
-              setError('No barcode found in the captured image. Please try again with a clearer photo.');
-            }
-          };
-          
-          img.onerror = () => {
-            setError('Failed to process the captured image. Please try again.');
-          };
-          
-          img.src = image.dataUrl;
-        } catch (scanError: any) {
-          console.error('Barcode reader initialization failed:', scanError);
-          setError('Barcode scanning not available. Please try again.');
-        }
+  const stopLiveScan = () => {
+    try {
+      codeReaderRef.current?.reset();
+      const stream = (videoRef.current?.srcObject as MediaStream | null) || null;
+      stream?.getTracks().forEach((t) => t.stop());
+      if (videoRef.current) {
+        (videoRef.current as HTMLVideoElement).srcObject = null;
       }
-      
+    } catch (e) {
+      console.warn('Error stopping live scan', e);
+    } finally {
       setIsCapturing(false);
-    } catch (err: any) {
-      console.error('Camera error details:', {
-        message: err.message,
-        name: err.name,
-        code: err.code,
-        stack: err.stack,
-        fullError: err
-      });
-      setIsCapturing(false);
-      
-      let errorMessage = 'Failed to access camera. ';
-      
-      if (err.message?.includes('permission') || err.message?.includes('denied')) {
-        errorMessage += 'Camera permission denied. Please grant camera access in your device settings.';
-      } else if (err.message?.includes('cancelled')) {
-        errorMessage += 'Camera capture was cancelled.';
-      } else if (err.message?.includes('not available')) {
-        errorMessage += 'Camera not available on this device.';
-      } else {
-        errorMessage += 'Please check camera permissions and try again.';
-      }
-      
-      setError(errorMessage);
     }
   };
 
+  const takePhoto = async () => {
+    // Start live video scan (auto-capture)
+    setError('');
+    setIsCapturing(true);
+    try {
+      const codeReader = new BrowserMultiFormatReader();
+      codeReaderRef.current = codeReader;
+
+      const devices = await codeReader.listVideoInputDevices();
+      let deviceId = devices[0]?.deviceId;
+      const back = devices.find((d) => /back|rear|environment/i.test(d.label));
+      if (back) deviceId = back.deviceId;
+
+      await codeReader.decodeFromVideoDevice(deviceId, videoRef.current!, (result, err) => {
+        if (result) {
+          onScan(result.getText());
+          stopLiveScan();
+        }
+      });
+    } catch (err) {
+      console.error('Live scan failed, attempting photo fallback', err);
+      // Optional fallback to single photo capture
+      try {
+        const image = await Camera.getPhoto({
+          quality: 90,
+          allowEditing: false,
+          resultType: CameraResultType.DataUrl,
+          source: CameraSource.Camera,
+          promptLabelHeader: 'Scan Barcode',
+          promptLabelPhoto: 'Capture',
+          promptLabelPicture: 'Choose from Photos',
+        });
+
+        if (image.dataUrl) {
+          const codeReader = new BrowserMultiFormatReader();
+          const img = new Image();
+          img.onload = async () => {
+            try {
+              const result = await codeReader.decodeFromImage(img);
+              onScan(result.getText());
+            } catch (scanError) {
+              setError('No barcode found in the captured image. Please try again.');
+            } finally {
+              setIsCapturing(false);
+            }
+          };
+          img.onerror = () => {
+            setError('Failed to process the captured image. Please try again.');
+            setIsCapturing(false);
+          };
+          img.src = image.dataUrl;
+          return;
+        }
+        setIsCapturing(false);
+      } catch (photoErr) {
+        console.error('Camera fallback failed', photoErr);
+        setError('Unable to access camera. Please check permissions and try again.');
+        setIsCapturing(false);
+      }
+    }
+  };
+
+  useEffect(() => {
+    return () => {
+      stopLiveScan();
+    };
+  }, []);
+
   const resetScanner = () => {
+    stopLiveScan();
     setCapturedImage(null);
     setError('');
   };
@@ -114,19 +121,19 @@ const CameraScanner: React.FC<CameraScannerProps> = ({ onScan }) => {
           </div>
         )}
         
-        <div className="relative">
-          {capturedImage ? (
-            <img
-              src={capturedImage}
-              alt="Captured barcode"
-              className="w-full max-w-md mx-auto rounded-lg"
-              style={{ aspectRatio: '4/3', objectFit: 'cover' }}
-            />
-          ) : (
-            <div className="w-full max-w-md mx-auto bg-gray-100 rounded-lg flex items-center justify-center" style={{ aspectRatio: '4/3' }}>
+        <div className="relative w-full max-w-md mx-auto" style={{ aspectRatio: '4/3' }}>
+          <video
+            ref={videoRef}
+            className="absolute inset-0 h-full w-full rounded-lg object-cover"
+            autoPlay
+            muted
+            playsInline
+          />
+          {!isCapturing && (
+            <div className="absolute inset-0 rounded-lg bg-muted flex items-center justify-center">
               <div className="text-center">
-                <CameraIcon className="h-12 w-12 mx-auto mb-2 text-gray-400" />
-                <p className="text-sm text-gray-500">Tap "Take Photo" to capture barcode</p>
+                <CameraIcon className="h-12 w-12 mx-auto mb-2 text-muted-foreground" />
+                <p className="text-sm text-muted-foreground">Tap "Start Scan" and align the barcode</p>
               </div>
             </div>
           )}
@@ -139,23 +146,23 @@ const CameraScanner: React.FC<CameraScannerProps> = ({ onScan }) => {
             className="flex items-center gap-2"
           >
             <CameraIcon className="h-4 w-4" />
-            {isCapturing ? 'Opening Camera...' : 'Take Photo'}
+            {isCapturing ? 'Scanning…' : 'Start Scan'}
           </Button>
           
-          {capturedImage && (
+          {isCapturing && (
             <Button 
               onClick={resetScanner}
               variant="outline"
               className="flex items-center gap-2"
             >
               <RotateCcw className="h-4 w-4" />
-              Reset
+              Stop
             </Button>
           )}
         </div>
 
         <p className="text-xs text-muted-foreground text-center">
-          Take a photo of the barcode for scanning
+          Auto-capture: hold the barcode steady until detected
         </p>
       </CardContent>
     </Card>
