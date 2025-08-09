@@ -2,8 +2,10 @@ import React, { useEffect, useRef, useState } from 'react';
 import { Camera, CameraResultType, CameraSource } from '@capacitor/camera';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Camera as CameraIcon, RotateCcw } from 'lucide-react';
+import { Camera as CameraIcon, RotateCcw, Flashlight } from 'lucide-react';
 import { BrowserMultiFormatReader } from '@zxing/library';
+import { Switch } from '@/components/ui/switch';
+import { Label } from '@/components/ui/label';
 
 interface CameraScannerProps {
   onScan: (result: string) => void;
@@ -14,9 +16,53 @@ const CameraScanner: React.FC<CameraScannerProps> = ({ onScan }) => {
   const [error, setError] = useState<string>('');
   const [capturedImage, setCapturedImage] = useState<string | null>(null);
 
+  const [isTorchOn, setIsTorchOn] = useState(false);
+  const [torchSupported, setTorchSupported] = useState(false);
+  const [vibrateOnScan, setVibrateOnScan] = useState(true);
+
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const codeReaderRef = useRef<BrowserMultiFormatReader | null>(null);
 
+  const getVideoTrack = () => {
+    const stream = (videoRef.current?.srcObject as MediaStream | null) || null;
+    return stream?.getVideoTracks()[0] || null;
+  };
+
+  const checkTorchSupport = () => {
+    try {
+      const track = getVideoTrack() as any;
+      const caps = track?.getCapabilities?.();
+      const supported = !!(caps && 'torch' in caps);
+      setTorchSupported(supported);
+      return supported;
+    } catch {
+      setTorchSupported(false);
+      return false;
+    }
+  };
+
+  const setTorch = async (on: boolean) => {
+    try {
+      const track = getVideoTrack() as any;
+      if (!track) return;
+      await track.applyConstraints({ advanced: [{ torch: on }] });
+      setIsTorchOn(on);
+    } catch (e) {
+      console.warn('Torch toggle failed', e);
+    }
+  };
+
+  useEffect(() => {
+    if (isCapturing) {
+      const t = setTimeout(() => {
+        checkTorchSupport();
+      }, 400);
+      return () => clearTimeout(t);
+    } else {
+      setIsTorchOn(false);
+      setTorchSupported(false);
+    }
+  }, [isCapturing]);
   const stopLiveScan = () => {
     try {
       codeReaderRef.current?.reset();
@@ -47,6 +93,12 @@ const CameraScanner: React.FC<CameraScannerProps> = ({ onScan }) => {
 
       await codeReader.decodeFromVideoDevice(deviceId, videoRef.current!, (result, err) => {
         if (result) {
+          try {
+            if (vibrateOnScan && typeof navigator !== 'undefined' && 'vibrate' in navigator) {
+              // Vibrate briefly on successful scan
+              (navigator as any).vibrate?.(100);
+            }
+          } catch {}
           onScan(result.getText());
           stopLiveScan();
         }
@@ -104,6 +156,8 @@ const CameraScanner: React.FC<CameraScannerProps> = ({ onScan }) => {
     stopLiveScan();
     setCapturedImage(null);
     setError('');
+    setIsTorchOn(false);
+    setTorchSupported(false);
   };
 
   return (
@@ -139,7 +193,7 @@ const CameraScanner: React.FC<CameraScannerProps> = ({ onScan }) => {
           )}
         </div>
 
-        <div className="flex gap-2 justify-center">
+        <div className="flex flex-wrap gap-2 justify-center">
           <Button 
             onClick={takePhoto} 
             disabled={isCapturing}
@@ -150,15 +204,36 @@ const CameraScanner: React.FC<CameraScannerProps> = ({ onScan }) => {
           </Button>
           
           {isCapturing && (
-            <Button 
-              onClick={resetScanner}
-              variant="outline"
-              className="flex items-center gap-2"
-            >
-              <RotateCcw className="h-4 w-4" />
-              Stop
-            </Button>
+            <>
+              <Button 
+                onClick={resetScanner}
+                variant="outline"
+                className="flex items-center gap-2"
+              >
+                <RotateCcw className="h-4 w-4" />
+                Stop
+              </Button>
+
+              {torchSupported && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setTorch(!isTorchOn)}
+                  className="flex items-center gap-2"
+                >
+                  <Flashlight className="h-4 w-4" />
+                  {isTorchOn ? 'Torch On' : 'Torch Off'}
+                </Button>
+              )}
+            </>
           )}
+        </div>
+
+        <div className="flex items-center justify-center gap-3">
+          <Label htmlFor="vibrate-on-scan" className="text-sm text-muted-foreground">
+            Vibrate on scan
+          </Label>
+          <Switch id="vibrate-on-scan" checked={vibrateOnScan} onCheckedChange={setVibrateOnScan} />
         </div>
 
         <p className="text-xs text-muted-foreground text-center">
