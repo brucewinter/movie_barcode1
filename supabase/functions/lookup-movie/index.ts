@@ -93,32 +93,40 @@ serve(async (req) => {
       
       // Get detailed movie info including credits
       const detailsResponse = await fetch(
-        `https://api.themoviedb.org/3/movie/${movie.id}?api_key=${tmdbApiKey}&append_to_response=credits`
+        `https://api.themoviedb.org/3/movie/${movie.id}?api_key=${tmdbApiKey}&append_to_response=credits,external_ids`
       )
 
       if (detailsResponse.ok) {
         const details = await detailsResponse.json()
         const director = details.credits?.crew?.find((person: any) => person.job === 'Director')?.name || 'Unknown'
 
-        // Get additional ratings from OMDB if API key is available
+        // Get additional ratings from OMDB if API key is available (prefer IMDb ID lookup)
         let imdbRating = 'N/A'
         let rottenTomatoesRating = 'N/A'
         
         if (omdbApiKey) {
           try {
-            const omdbResponse = await fetch(
-              `https://www.omdbapi.com/?apikey=${omdbApiKey}&t=${encodeURIComponent(details.title)}&y=${details.release_date ? new Date(details.release_date).getFullYear() : ''}`
-            )
+            const imdbId = details.external_ids?.imdb_id
+            const year = details.release_date ? new Date(details.release_date).getFullYear() : ''
+            const omdbUrl = imdbId
+              ? `https://www.omdbapi.com/?apikey=${omdbApiKey}&i=${encodeURIComponent(imdbId)}`
+              : `https://www.omdbapi.com/?apikey=${omdbApiKey}&t=${encodeURIComponent(details.title)}&y=${year}`
+
+            const omdbResponse = await fetch(omdbUrl)
             
             if (omdbResponse.ok) {
               const omdbData = await omdbResponse.json()
               if (omdbData.Response === 'True') {
-                imdbRating = omdbData.imdbRating !== 'N/A' ? `${omdbData.imdbRating}/10` : 'N/A'
+                imdbRating = omdbData.imdbRating && omdbData.imdbRating !== 'N/A' ? `${omdbData.imdbRating}/10` : 'N/A'
                 
                 // Find Rotten Tomatoes rating from the Ratings array
                 const rtRating = omdbData.Ratings?.find((r: any) => r.Source === 'Rotten Tomatoes')
                 rottenTomatoesRating = rtRating ? rtRating.Value : 'N/A'
+              } else {
+                console.log('OMDB lookup unsuccessful:', omdbData?.Error || 'Unknown error')
               }
+            } else {
+              console.warn('OMDB response not OK:', omdbResponse.status)
             }
           } catch (error) {
             console.error('Error fetching OMDB data:', error)
