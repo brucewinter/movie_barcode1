@@ -107,26 +107,51 @@ serve(async (req) => {
         if (omdbApiKey) {
           try {
             const imdbId = details.external_ids?.imdb_id
-            const year = details.release_date ? new Date(details.release_date).getFullYear() : ''
-            const omdbUrl = imdbId
-              ? `https://www.omdbapi.com/?apikey=${omdbApiKey}&i=${encodeURIComponent(imdbId)}`
-              : `https://www.omdbapi.com/?apikey=${omdbApiKey}&t=${encodeURIComponent(details.title)}&y=${year}`
+            const yearNum = details.release_date ? new Date(details.release_date).getFullYear() : undefined
 
-            const omdbResponse = await fetch(omdbUrl)
-            
-            if (omdbResponse.ok) {
-              const omdbData = await omdbResponse.json()
-              if (omdbData.Response === 'True') {
-                imdbRating = omdbData.imdbRating && omdbData.imdbRating !== 'N/A' ? `${omdbData.imdbRating}/10` : 'N/A'
-                
-                // Find Rotten Tomatoes rating from the Ratings array
-                const rtRating = omdbData.Ratings?.find((r: any) => r.Source === 'Rotten Tomatoes')
-                rottenTomatoesRating = rtRating ? rtRating.Value : 'N/A'
-              } else {
-                console.log('OMDB lookup unsuccessful:', omdbData?.Error || 'Unknown error')
+            const build = (p: Record<string, string | number | undefined>) => {
+              const u = new URL('https://www.omdbapi.com/')
+              u.searchParams.set('apikey', omdbApiKey)
+              Object.entries(p).forEach(([k, v]) => {
+                if (v !== undefined && v !== '') u.searchParams.set(k, String(v))
+              })
+              return u.toString()
+            }
+
+            // Attempt order: IMDb ID → title+year → title → original_title+year → original_title
+            const attempts: string[] = []
+            if (imdbId) attempts.push(build({ i: imdbId, tomatoes: 'true' }))
+            attempts.push(build({ t: details.title, y: yearNum, type: 'movie', tomatoes: 'true' }))
+            attempts.push(build({ t: details.title, type: 'movie', tomatoes: 'true' }))
+            if (details.original_title && details.original_title !== details.title) {
+              attempts.push(build({ t: details.original_title, y: yearNum, type: 'movie', tomatoes: 'true' }))
+              attempts.push(build({ t: details.original_title, type: 'movie', tomatoes: 'true' }))
+            }
+
+            let omdbData: any | null = null
+            for (const url of attempts) {
+              try {
+                const res = await fetch(url)
+                if (!res.ok) {
+                  console.warn('OMDB response not OK:', res.status)
+                  continue
+                }
+                const data = await res.json()
+                if (data && data.Response === 'True') {
+                  omdbData = data
+                  break
+                } else {
+                  console.log('OMDB attempt failed:', data?.Error || 'Unknown error')
+                }
+              } catch (e) {
+                console.warn('OMDB attempt error:', e)
               }
-            } else {
-              console.warn('OMDB response not OK:', omdbResponse.status)
+            }
+
+            if (omdbData) {
+              imdbRating = omdbData.imdbRating && omdbData.imdbRating !== 'N/A' ? `${omdbData.imdbRating}/10` : 'N/A'
+              const rtRating = omdbData.Ratings?.find((r: any) => r.Source === 'Rotten Tomatoes')
+              rottenTomatoesRating = rtRating ? rtRating.Value : 'N/A'
             }
           } catch (error) {
             console.error('Error fetching OMDB data:', error)
