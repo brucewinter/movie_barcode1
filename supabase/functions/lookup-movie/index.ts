@@ -93,7 +93,7 @@ serve(async (req) => {
       
       // Get detailed movie info including credits
       const detailsResponse = await fetch(
-        `https://api.themoviedb.org/3/movie/${movie.id}?api_key=${tmdbApiKey}&append_to_response=credits,external_ids`
+        `https://api.themoviedb.org/3/movie/${movie.id}?api_key=${tmdbApiKey}&append_to_response=credits,external_ids,alternative_titles`
       )
 
       if (detailsResponse.ok) {
@@ -103,6 +103,11 @@ serve(async (req) => {
         // Get additional ratings from OMDB if API key is available (prefer IMDb ID lookup)
         let imdbRating = 'N/A'
         let rottenTomatoesRating = 'N/A'
+
+        // TMDb rating: only show if there are votes and average > 0
+        const tmdbRatingValue = (typeof details.vote_average === 'number' && details.vote_average > 0 && (details.vote_count ?? 0) > 0)
+          ? `${details.vote_average.toFixed(1)}/10`
+          : 'N/A'
         
         if (omdbApiKey) {
           try {
@@ -118,14 +123,26 @@ serve(async (req) => {
               return u.toString()
             }
 
-            // Attempt order: IMDb ID → title+year → title → original_title+year → original_title
+            // Collect alternative titles from TMDb (prioritize US/GB/CA/AU and working/alternative types)
+            const altTitles: string[] = Array.isArray(details.alternative_titles?.titles)
+              ? details.alternative_titles.titles
+                  .filter((t: any) => ['US','GB','CA','AU'].includes(t.iso_3166_1) || (t.type || '').toLowerCase().includes('working') || (t.type || '').toLowerCase().includes('alternative'))
+                  .map((t: any) => t.title)
+                  .filter(Boolean)
+              : []
+
+            const uniqueTitles: string[] = Array.from(new Set([
+              details.title,
+              details.original_title,
+              ...altTitles,
+            ].filter(Boolean)))
+
+            // Attempt order: IMDb ID → each title (+/- year)
             const attempts: string[] = []
-            if (imdbId) attempts.push(build({ i: imdbId, tomatoes: 'true' }))
-            attempts.push(build({ t: details.title, y: yearNum, type: 'movie', tomatoes: 'true' }))
-            attempts.push(build({ t: details.title, type: 'movie', tomatoes: 'true' }))
-            if (details.original_title && details.original_title !== details.title) {
-              attempts.push(build({ t: details.original_title, y: yearNum, type: 'movie', tomatoes: 'true' }))
-              attempts.push(build({ t: details.original_title, type: 'movie', tomatoes: 'true' }))
+            if (imdbId) attempts.push(build({ i: imdbId }))
+            for (const t of uniqueTitles) {
+              if (yearNum) attempts.push(build({ t, y: yearNum, type: 'movie' }))
+              attempts.push(build({ t, type: 'movie' }))
             }
 
             let omdbData: any | null = null
@@ -148,10 +165,58 @@ serve(async (req) => {
               }
             }
 
+            // Fallback: OMDb search to find an IMDb ID, then fetch full details
+            if (!omdbData) {
+              const normalize = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, '')
+              const inYearTol = (yStr: string | undefined, target?: number) => {
+                if (!yStr || !target) return false
+                const m = yStr.match(/\d{4}/)
+                if (!m) return false
+                const y = parseInt(m[0], 10)
+                return Math.abs(y - target) <= 1
+              }
+
+              for (const title of uniqueTitles) {
+                try {
+                  const searchUrl = build({ s: title, type: 'movie' })
+                  const sRes = await fetch(searchUrl)
+                  if (!sRes.ok) continue
+                  const sData = await sRes.json()
+                  if (sData?.Response === 'True' && Array.isArray(sData.Search)) {
+                    const nTitle = normalize(title)
+                    let best: any = null
+                    let bestScore = -Infinity
+                    for (const r of sData.Search) {
+                      const nr = normalize(r.Title || '')
+                      let score = 0
+                      if (nr === nTitle) score += 10
+                      else if (nr.startsWith(nTitle) || nTitle.startsWith(nr)) score += 5
+                      if (inYearTol(r.Year, yearNum)) score += 3
+                      if (score > bestScore) { bestScore = score; best = r }
+                    }
+                    if (best?.imdbID) {
+                      const byId = await fetch(build({ i: best.imdbID }))
+                      if (byId.ok) {
+                        const byIdData = await byId.json()
+                        if (byIdData?.Response === 'True') {
+                          omdbData = byIdData
+                          break
+                        }
+                      }
+                    }
+                  }
+                } catch (e) {
+                  console.warn('OMDB search error:', e)
+                }
+              }
+            }
+
             if (omdbData) {
               imdbRating = omdbData.imdbRating && omdbData.imdbRating !== 'N/A' ? `${omdbData.imdbRating}/10` : 'N/A'
               const rtRating = omdbData.Ratings?.find((r: any) => r.Source === 'Rotten Tomatoes')
               rottenTomatoesRating = rtRating ? rtRating.Value : 'N/A'
+            } else {
+              console.log('OMDB: no match after attempts and search')
             }
           } catch (error) {
             console.error('Error fetching OMDB data:', error)
@@ -164,7 +229,7 @@ serve(async (req) => {
             title: details.title,
             year: details.release_date ? new Date(details.release_date).getFullYear().toString() : 'Unknown',
             director,
-            rating: details.vote_average ? `${details.vote_average.toFixed(1)}/10` : 'N/A',
+            rating: tmdbRatingValue,
             imdbRating,
             rottenTomatoesRating,
             overview: details.overview || 'No overview available',
