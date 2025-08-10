@@ -150,7 +150,7 @@ const Index = () => {
 
       <div className="text-center text-sm text-muted-foreground space-y-2">
         <p>Scan barcodes with your camera or enter them manually above</p>
-        {movieInfo?.source === 'barcode_only' && (
+        {movieInfo?.source === 'barcode_only' && movieInfo?.overview === 'Movie database API key not configured' && (
           <div className="bg-blue-50 p-3 rounded-lg">
             <p className="text-blue-800 font-medium">Setup Required:</p>
             <p className="text-blue-700 text-xs">

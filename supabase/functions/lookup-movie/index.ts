@@ -78,23 +78,66 @@ serve(async (req) => {
       )
     }
 
-    const movieSearchResponse = await fetch(
-      `https://api.themoviedb.org/3/search/movie?api_key=${tmdbApiKey}&query=${encodeURIComponent(cleanTitle)}`
-    )
-
-    if (!movieSearchResponse.ok) {
-      throw new Error('Failed to search for movie')
+    // Enhanced TMDb search with year and scoring
+    const extractYear = (s: string): number | undefined => {
+      const m = s.match(/(19|20)\d{2}/)
+      return m ? parseInt(m[0], 10) : undefined
     }
 
-    const movieSearchData = await movieSearchResponse.json()
+    const primaryYear = extractYear(productTitle) || extractYear(cleanTitle)
 
-    if (movieSearchData.results && movieSearchData.results.length > 0) {
-      const movie = movieSearchData.results[0]
-      
-      // Get detailed movie info including credits
+    const stripExtras = (s: string) => s
+      .replace(/\b(uncut|unrated|special edition|limited edition|collector'?s edition|steelbook|combo pack|digital|ultraviolet|uv|with .*|and .*|\d+-disc|dvd|blu[- ]?ray|4k|uhd|ultra hd|widescreen|full screen|region \w+)\b/gi, '')
+      .replace(/[:\-–].*$/,'')
+      .replace(/\(.*?\)/g, '')
+      .replace(/\s+/g, ' ')
+      .trim()
+
+    const normalize = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, '')
+
+    const queries = Array.from(new Set([
+      cleanTitle,
+      stripExtras(productTitle),
+      stripExtras(cleanTitle),
+    ].filter(Boolean)))
+
+    type Candidate = { id: number; title: string; release_date?: string; score: number }
+    let best: Candidate | null = null
+
+    const trySearch = async (q: string, useYear: boolean) => {
+      const url = new URL('https://api.themoviedb.org/3/search/movie')
+      url.searchParams.set('api_key', tmdbApiKey)
+      url.searchParams.set('query', q)
+      if (useYear && primaryYear) url.searchParams.set('primary_release_year', String(primaryYear))
+      const res = await fetch(url.toString())
+      if (!res.ok) return
+      const json = await res.json()
+      const list = Array.isArray(json.results) ? json.results : []
+      for (const r of list) {
+        const nQ = normalize(q)
+        const nT = normalize(r.title || r.original_title || '')
+        let score = 0
+        if (nT === nQ) score += 10
+        else if (nT.startsWith(nQ) || nQ.startsWith(nT)) score += 6
+        const y = r.release_date ? parseInt(r.release_date.slice(0,4), 10) : undefined
+        if (primaryYear && y && Math.abs(y - primaryYear) <= 1) score += 4
+        if ((r.vote_count || 0) > 50) score += 1
+        if (!best || score > best.score) {
+          best = { id: r.id, title: r.title, release_date: r.release_date, score }
+        }
+      }
+    }
+
+    for (const q of queries) {
+      await trySearch(q, true)
+      if (!best) await trySearch(q, false)
+    }
+
+    if (best) {
       const detailsResponse = await fetch(
-        `https://api.themoviedb.org/3/movie/${movie.id}?api_key=${tmdbApiKey}&append_to_response=credits,external_ids,alternative_titles`
+        `https://api.themoviedb.org/3/movie/${best.id}?api_key=${tmdbApiKey}&append_to_response=credits,external_ids,alternative_titles`
       )
+
 
       if (detailsResponse.ok) {
         const details = await detailsResponse.json()
