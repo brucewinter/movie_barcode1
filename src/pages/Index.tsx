@@ -1,5 +1,6 @@
 import React from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Accordion, AccordionItem, AccordionTrigger, AccordionContent } from '@/components/ui/accordion';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Film, Search } from 'lucide-react';
@@ -142,6 +143,20 @@ const Index = () => {
               <div>
                 <span className="font-medium">Overview:</span> 
                 <p className="mt-1 text-sm">{movieInfo.overview}</p>
+              </div>
+            )}
+            {Array.isArray(movieInfo.debug) && movieInfo.debug.length > 0 && (
+              <div className="mt-4">
+                <Accordion type="single" collapsible className="w-full">
+                  <AccordionItem value="debug">
+                    <AccordionTrigger>Debug details</AccordionTrigger>
+                    <AccordionContent>
+                      <pre className="bg-muted rounded-md p-3 text-xs overflow-x-auto">
+                        {JSON.stringify(movieInfo.debug, null, 2)}
+                      </pre>
+                    </AccordionContent>
+                  </AccordionItem>
+                </Accordion>
               </div>
             )}
           </CardContent>
