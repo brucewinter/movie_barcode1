@@ -13,6 +13,7 @@ serve(async (req) => {
 
   try {
     const { barcode } = await req.json()
+    console.log('lookup-movie: incoming', { barcode })
 
     if (!barcode) {
       return new Response(
@@ -53,6 +54,8 @@ serve(async (req) => {
       .replace(/\b(DVD|Blu-ray|Blu ray|4K|Ultra HD|HD|Special Edition|Widescreen|Full Screen)\b/gi, '')
       .replace(/\s+/g, ' ')
       .trim()
+
+    console.log('lookup-movie: upc', { title: productTitle, cleanTitle })
 
     // Use The Movie Database API (free tier)
     const tmdbApiKey = Deno.env.get('TMDB_API_KEY')
@@ -132,6 +135,7 @@ serve(async (req) => {
       await trySearch(q, true)
       if (!best) await trySearch(q, false)
     }
+    console.log('lookup-movie: tmdb best', best)
 
     if (best) {
       const detailsResponse = await fetch(
@@ -199,6 +203,7 @@ serve(async (req) => {
                 const data = await res.json()
                 if (data && data.Response === 'True') {
                   omdbData = data
+                  console.log('lookup-movie: omdb direct match', { title: data.Title, year: data.Year })
                   break
                 } else {
                   console.log('OMDB attempt failed:', data?.Error || 'Unknown error')
@@ -243,6 +248,7 @@ serve(async (req) => {
                         const byIdData = await byId.json()
                         if (byIdData?.Response === 'True') {
                           omdbData = byIdData
+                          console.log('lookup-movie: omdb search match', { title: byIdData.Title, year: byIdData.Year })
                           break
                         }
                       }
@@ -266,6 +272,7 @@ serve(async (req) => {
           }
         }
 
+        console.log('lookup-movie: returning tmdb', { barcode, title: details.title, best })
         return new Response(
           JSON.stringify({
             barcode,
@@ -289,6 +296,7 @@ serve(async (req) => {
     }
 
     // Fallback: return basic info from barcode lookup
+    console.log('lookup-movie: returning barcode_only', { barcode, productTitle })
     return new Response(
       JSON.stringify({
         barcode,
