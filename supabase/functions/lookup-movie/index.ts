@@ -14,6 +14,8 @@ serve(async (req) => {
   try {
     const { barcode } = await req.json()
     console.log('lookup-movie: incoming', { barcode })
+    const debugLogs: any[] = []
+    debugLogs.push({ label: 'incoming', data: { barcode } })
 
     if (!barcode) {
       return new Response(
@@ -56,6 +58,7 @@ serve(async (req) => {
       .trim()
 
     console.log('lookup-movie: upc', { title: productTitle, cleanTitle })
+    debugLogs.push({ label: 'upc', data: { title: productTitle, cleanTitle } })
 
     // Use The Movie Database API (free tier)
     const tmdbApiKey = Deno.env.get('TMDB_API_KEY')
@@ -72,7 +75,8 @@ serve(async (req) => {
           director: 'Unknown',
           rating: 'N/A',
           overview: 'Movie database API key not configured',
-          source: 'barcode_only'
+           source: 'barcode_only',
+           debug: debugLogs
         }),
         { 
           status: 200, 
@@ -103,6 +107,9 @@ serve(async (req) => {
       stripExtras(productTitle),
       stripExtras(cleanTitle),
     ].filter(Boolean)))
+
+    console.log('lookup-movie: search prep', { primaryYear, queries })
+    debugLogs.push({ label: 'search prep', data: { primaryYear, queries } })
 
     type Candidate = { id: number; title: string; release_date?: string; score: number }
     let best: Candidate | null = null
@@ -136,6 +143,7 @@ serve(async (req) => {
       if (!best) await trySearch(q, false)
     }
     console.log('lookup-movie: tmdb best', best)
+    debugLogs.push({ label: 'tmdb best', data: best })
 
     if (best) {
       const detailsResponse = await fetch(
@@ -184,6 +192,9 @@ serve(async (req) => {
               ...altTitles,
             ].filter(Boolean)))
 
+            console.log('lookup-movie: omdb titles', { uniqueTitles, yearNum })
+            debugLogs.push({ label: 'omdb titles', data: { uniqueTitles, yearNum } })
+
             // Attempt order: IMDb ID → each title (+/- year)
             const attempts: string[] = []
             if (imdbId) attempts.push(build({ i: imdbId }))
@@ -204,6 +215,7 @@ serve(async (req) => {
                 if (data && data.Response === 'True') {
                   omdbData = data
                   console.log('lookup-movie: omdb direct match', { title: data.Title, year: data.Year })
+                  debugLogs.push({ label: 'omdb direct match', data: { title: data.Title, year: data.Year } })
                   break
                 } else {
                   console.log('OMDB attempt failed:', data?.Error || 'Unknown error')
@@ -248,7 +260,8 @@ serve(async (req) => {
                         const byIdData = await byId.json()
                         if (byIdData?.Response === 'True') {
                           omdbData = byIdData
-                          console.log('lookup-movie: omdb search match', { title: byIdData.Title, year: byIdData.Year })
+                           console.log('lookup-movie: omdb search match', { title: byIdData.Title, year: byIdData.Year })
+                           debugLogs.push({ label: 'omdb search match', data: { title: byIdData.Title, year: byIdData.Year } })
                           break
                         }
                       }
@@ -266,13 +279,15 @@ serve(async (req) => {
               rottenTomatoesRating = rtRating ? rtRating.Value : 'N/A'
             } else {
               console.log('OMDB: no match after attempts and search')
+              debugLogs.push({ label: 'omdb no match' })
             }
           } catch (error) {
             console.error('Error fetching OMDB data:', error)
           }
         }
 
-        console.log('lookup-movie: returning tmdb', { barcode, title: details.title, best })
+         console.log('lookup-movie: returning tmdb', { barcode, title: details.title, best })
+         debugLogs.push({ label: 'returning tmdb', data: { barcode, title: details.title, best } })
         return new Response(
           JSON.stringify({
             barcode,
@@ -285,7 +300,8 @@ serve(async (req) => {
             overview: details.overview || 'No overview available',
             runtime: details.runtime ? `${details.runtime} minutes` : 'Unknown',
             genres: details.genres?.map((g: any) => g.name).join(', ') || 'Unknown',
-            source: 'tmdb'
+             source: 'tmdb',
+             debug: debugLogs
           }),
           { 
             status: 200, 
@@ -296,7 +312,8 @@ serve(async (req) => {
     }
 
     // Fallback: return basic info from barcode lookup
-    console.log('lookup-movie: returning barcode_only', { barcode, productTitle })
+     console.log('lookup-movie: returning barcode_only', { barcode, productTitle })
+     debugLogs.push({ label: 'returning barcode_only', data: { barcode, productTitle } })
     return new Response(
       JSON.stringify({
         barcode,
@@ -305,7 +322,8 @@ serve(async (req) => {
         director: 'Unknown', 
         rating: 'N/A',
         overview: 'No detailed movie information found',
-        source: 'barcode_only'
+         source: 'barcode_only',
+         debug: debugLogs
       }),
       { 
         status: 200, 
