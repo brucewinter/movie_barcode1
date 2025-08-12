@@ -49,16 +49,38 @@ serve(async (req) => {
     const product = upcData.items[0]
     const productTitle = product.title
 
-    // Step 2: Search for movie using the product title
-    // Extract movie title from product title (remove format info like "DVD", "Blu-ray", etc.)
-    const cleanTitle = productTitle
-      .replace(/\(.*?\)/g, '') // Remove parentheses content
-      .replace(/\b(DVD|Blu-ray|Blu ray|4K|Ultra HD|HD|Special Edition|Widescreen|Full Screen)\b/gi, '')
-      .replace(/\s+/g, ' ')
-      .trim()
+// Step 2: Search for movie using the product title
+// Extract movie title from product title (remove format info like "DVD", "Blu-ray", etc.) and vendor/category noise
+const removeParens = (s: string) => s.replace(/\(.*?\)/g, ' ').trim()
+const baseFromMultiSpace = (s: string) => {
+  const parts = s.split(/\s{2,}/)
+  return (parts[0] || s).trim()
+}
+const stripKnownFormats = (s: string) => s.replace(/\b(DVD|Blu[- ]?ray|Blu ray|4K|Ultra HD|UHD|HD|Special Edition|Widescreen|Full Screen|Steelbook|Combo Pack)\b/gi, ' ')
+const normalizeSpaces = (s: string) => s.replace(/\s+/g, ' ').trim()
+const stripAfterSeparators = (s: string) => s.split(/[-–—|\/•·]/)[0].trim()
+const stripGenreNoise = (s: string) => {
+  const markers = ['mystery & suspense','mystery','suspense','thriller','horror','comedy','drama','action','adventure','romance','fantasy','science fiction','sci-fi','documentary','animation','western','family','music','war','history','sport','kids','children','tv series','season','magenta light']
+  const lower = s.toLowerCase()
+  let cut = s.length
+  for (const m of markers) {
+    const idx = lower.indexOf(m)
+    if (idx !== -1 && idx < cut) cut = idx
+  }
+  return s.slice(0, cut).trim()
+}
+const productNoParens = removeParens(productTitle)
+const cleanTitle = normalizeSpaces(stripKnownFormats(productNoParens))
+const firstSegment = normalizeSpaces(baseFromMultiSpace(productNoParens))
+const titleNoSeparators = normalizeSpaces(stripAfterSeparators(productNoParens))
+const minimalTitle = normalizeSpaces(stripGenreNoise(cleanTitle)).split(':')[0]
+const firstTwoWords = (() => {
+  const tokens = cleanTitle.split(' ').filter(Boolean)
+  return tokens.slice(0, Math.min(2, tokens.length)).join(' ')
+})()
 
-    console.log('lookup-movie: upc', { title: productTitle, cleanTitle })
-    debugLogs.push({ label: 'upc', data: { title: productTitle, cleanTitle } })
+console.log('lookup-movie: upc', { title: productTitle, cleanTitle, firstSegment, titleNoSeparators, minimalTitle, firstTwoWords })
+debugLogs.push({ label: 'upc', data: { title: productTitle, cleanTitle, firstSegment, titleNoSeparators, minimalTitle, firstTwoWords } })
 
     // Use The Movie Database API (free tier)
     const tmdbApiKey = Deno.env.get('TMDB_API_KEY')
@@ -102,11 +124,15 @@ serve(async (req) => {
 
     const normalize = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, '')
 
-    const queries = Array.from(new Set([
-      cleanTitle,
-      stripExtras(productTitle),
-      stripExtras(cleanTitle),
-    ].filter(Boolean)))
+const queries = Array.from(new Set([
+  cleanTitle,
+  stripExtras(productTitle),
+  stripExtras(cleanTitle),
+  firstSegment,
+  titleNoSeparators,
+  minimalTitle,
+  firstTwoWords,
+].filter(q => q && q.length >= 2)))
 
     console.log('lookup-movie: search prep', { primaryYear, queries })
     debugLogs.push({ label: 'search prep', data: { primaryYear, queries } })
