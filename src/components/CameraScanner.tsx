@@ -213,20 +213,20 @@ const CameraScanner: React.FC<CameraScannerProps> = ({ onScan }) => {
 
   return (
     <Card>
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2">
-          <CameraIcon className="h-5 w-5" />
+      <CardHeader className="pb-2">
+        <CardTitle className="flex items-center gap-2 text-base">
+          <CameraIcon className="h-4 w-4" />
           Camera Scanner
         </CardTitle>
       </CardHeader>
-      <CardContent className="space-y-4">
+      <CardContent className="space-y-2">
         {error && (
           <div className="p-3 bg-destructive/10 text-destructive rounded-md text-sm">
             {error}
           </div>
         )}
         
-        <div className="relative w-full max-w-md mx-auto" style={{ aspectRatio: '4/3' }}>
+        <div className="relative w-full max-w-sm mx-auto" style={{ aspectRatio: '16/9' }}>
           <video
             ref={videoRef}
             className="absolute inset-0 h-full w-full rounded-lg object-cover"
@@ -245,8 +245,8 @@ const CameraScanner: React.FC<CameraScannerProps> = ({ onScan }) => {
           {!isCapturing && (
             <div className="absolute inset-0 rounded-lg bg-muted flex items-center justify-center">
               <div className="text-center">
-                <CameraIcon className="h-12 w-12 mx-auto mb-2 text-muted-foreground" />
-                <p className="text-sm text-muted-foreground">Tap "Start Scan" and align the barcode</p>
+                <CameraIcon className="h-8 w-8 mx-auto mb-1 text-muted-foreground" />
+                <p className="text-xs text-muted-foreground">Tap "Start Scan"</p>
               </div>
             </div>
           )}
@@ -256,48 +256,38 @@ const CameraScanner: React.FC<CameraScannerProps> = ({ onScan }) => {
           <Button 
             onClick={takePhoto} 
             disabled={isCapturing}
-            className="flex items-center gap-2"
+            className="flex items-center gap-1 text-sm"
+            size="sm"
           >
-            <CameraIcon className="h-4 w-4" />
+            <CameraIcon className="h-3 w-3" />
             {isCapturing ? 'Scanning…' : 'Start Scan'}
           </Button>
           
           {isCapturing && (
-            <>
-              <Button 
-                onClick={resetScanner}
-                variant="outline"
-                className="flex items-center gap-2"
-              >
-                <RotateCcw className="h-4 w-4" />
-                Stop
-              </Button>
+            <Button 
+              onClick={resetScanner}
+              variant="outline"
+              className="flex items-center gap-1 text-sm"
+              size="sm"
+            >
+              <RotateCcw className="h-3 w-3" />
+              Stop
+            </Button>
+          )}
 
-              {torchSupported && (
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => setTorch(!isTorchOn)}
-                  className="flex items-center gap-2"
-                >
-                  <Flashlight className="h-4 w-4" />
-                  {isTorchOn ? 'Torch On' : 'Torch Off'}
-                </Button>
-              )}
-            </>
+          {isCapturing && torchSupported && (
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setTorch(!isTorchOn)}
+              className="flex items-center gap-1 text-sm"
+              size="sm"
+            >
+              <Flashlight className="h-3 w-3" />
+              {isTorchOn ? 'On' : 'Off'}
+            </Button>
           )}
         </div>
-
-        <div className="flex items-center justify-center gap-3">
-          <Label htmlFor="vibrate-on-scan" className="text-sm text-muted-foreground">
-            Vibrate on scan
-          </Label>
-          <Switch id="vibrate-on-scan" checked={vibrateOnScan} onCheckedChange={setVibrateOnScan} />
-        </div>
-
-        <p className="text-xs text-muted-foreground text-center">
-          Auto-capture: hold the barcode steady until detected
-        </p>
       </CardContent>
     </Card>
   );

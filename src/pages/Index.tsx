@@ -73,22 +73,23 @@ const Index = () => {
       <CameraScanner onScan={handleBarcodeFound} />
 
       <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Search className="h-5 w-5" />
-            Manual Barcode Entry
+        <CardHeader className="pb-2">
+          <CardTitle className="flex items-center gap-2 text-base">
+            <Search className="h-4 w-4" />
+            Manual Entry
           </CardTitle>
         </CardHeader>
-        <CardContent className="space-y-3">
+        <CardContent className="space-y-2">
           <div className="flex gap-2">
             <Input
-              placeholder="Enter barcode number..."
+              placeholder="Enter barcode..."
               value={barcode}
               onChange={(e) => setBarcode(e.target.value)}
               onKeyPress={(e) => e.key === 'Enter' && handleManualSearch()}
+              className="text-sm"
             />
-            <Button onClick={handleManualSearch} disabled={isLoading}>
-              <Search className="h-4 w-4 mr-2" />
+            <Button onClick={handleManualSearch} disabled={isLoading} size="sm">
+              <Search className="h-3 w-3 mr-1" />
               {isLoading ? 'Searching...' : 'Search'}
             </Button>
           </div>
@@ -97,52 +98,30 @@ const Index = () => {
 
       {movieInfo && (
         <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Film className="h-5 w-5" />
+          <CardHeader className="pb-2">
+            <CardTitle className="flex items-center gap-2 text-base">
+              <Film className="h-4 w-4" />
               Movie Information
             </CardTitle>
           </CardHeader>
-          <CardContent className="space-y-1">
-            <div>
-              <span className="font-medium">Barcode:</span> {movieInfo.barcode}
-            </div>
-            <div>
-              <span className="font-medium">Title:</span> {movieInfo.title}
-            </div>
-            <div>
-              <span className="font-medium">Year:</span> {movieInfo.year}
-            </div>
-            <div>
-              <span className="font-medium">Director:</span> {movieInfo.director}
-            </div>
-            <div>
-              <span className="font-medium">TMDb Rating:</span> {movieInfo.rating}
-            </div>
+          <CardContent className="space-y-1 text-sm">
+            <div><span className="font-medium">Barcode:</span> {movieInfo.barcode}</div>
+            <div><span className="font-medium">Title:</span> {movieInfo.title}</div>
+            {movieInfo.year && <div><span className="font-medium">Year:</span> {movieInfo.year}</div>}
+            {movieInfo.director && <div><span className="font-medium">Director:</span> {movieInfo.director}</div>}
+            <div><span className="font-medium">TMDb:</span> {movieInfo.rating}</div>
             {movieInfo.imdbRating && movieInfo.imdbRating !== 'N/A' && (
-              <div>
-                <span className="font-medium">IMDB Rating:</span> {movieInfo.imdbRating}
-              </div>
+              <div><span className="font-medium">IMDB:</span> {movieInfo.imdbRating}</div>
             )}
             {movieInfo.rottenTomatoesRating && movieInfo.rottenTomatoesRating !== 'N/A' && (
-              <div>
-                <span className="font-medium">Rotten Tomatoes:</span> {movieInfo.rottenTomatoesRating}
-              </div>
+              <div><span className="font-medium">Rotten Tomatoes:</span> {movieInfo.rottenTomatoesRating}</div>
             )}
-            {movieInfo.runtime && (
-              <div>
-                <span className="font-medium">Runtime:</span> {movieInfo.runtime}
-              </div>
-            )}
-            {movieInfo.genres && (
-              <div>
-                <span className="font-medium">Genres:</span> {movieInfo.genres}
-              </div>
-            )}
+            {movieInfo.runtime && <div><span className="font-medium">Runtime:</span> {movieInfo.runtime}</div>}
+            {movieInfo.genres && <div><span className="font-medium">Genres:</span> {movieInfo.genres}</div>}
             {movieInfo.overview && (
               <div>
                 <span className="font-medium">Overview:</span> 
-                <p className="mt-0.5 text-sm">{movieInfo.overview}</p>
+                <p className="mt-0.5 text-xs">{movieInfo.overview}</p>
               </div>
             )}
             {Array.isArray(movieInfo.debug) && movieInfo.debug.length > 0 && (
