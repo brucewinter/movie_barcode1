@@ -59,13 +59,13 @@ const Index = () => {
   };
 
   return (
-    <div className="container mx-auto p-4 space-y-6">
-      <div className="text-center space-y-2">
-        <h1 className="text-3xl font-bold flex items-center justify-center gap-2">
-          <Film className="h-8 w-8" />
+    <div className="container mx-auto p-2 space-y-3">
+      <div className="text-center space-y-1">
+        <h1 className="text-2xl font-bold flex items-center justify-center gap-2">
+          <Film className="h-6 w-6" />
           Flicks Finder
         </h1>
-        <p className="text-muted-foreground">
+        <p className="text-muted-foreground text-sm">
           Scan or enter a movie barcode to get information
         </p>
       </div>
@@ -79,7 +79,7 @@ const Index = () => {
             Manual Barcode Entry
           </CardTitle>
         </CardHeader>
-        <CardContent className="space-y-4">
+        <CardContent className="space-y-3">
           <div className="flex gap-2">
             <Input
               placeholder="Enter barcode number..."
@@ -103,7 +103,7 @@ const Index = () => {
               Movie Information
             </CardTitle>
           </CardHeader>
-          <CardContent className="space-y-2">
+          <CardContent className="space-y-1">
             <div>
               <span className="font-medium">Barcode:</span> {movieInfo.barcode}
             </div>
@@ -142,7 +142,7 @@ const Index = () => {
             {movieInfo.overview && (
               <div>
                 <span className="font-medium">Overview:</span> 
-                <p className="mt-1 text-sm">{movieInfo.overview}</p>
+                <p className="mt-0.5 text-sm">{movieInfo.overview}</p>
               </div>
             )}
             {Array.isArray(movieInfo.debug) && movieInfo.debug.length > 0 && (
