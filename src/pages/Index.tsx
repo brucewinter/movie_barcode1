@@ -72,30 +72,6 @@ const Index = () => {
 
       <CameraScanner onScan={handleBarcodeFound} />
 
-      <Card>
-        <CardHeader className="pb-2">
-          <CardTitle className="flex items-center gap-2 text-base">
-            <Search className="h-4 w-4" />
-            Manual Entry
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-2">
-          <div className="flex gap-2">
-            <Input
-              placeholder="Enter barcode..."
-              value={barcode}
-              onChange={(e) => setBarcode(e.target.value)}
-              onKeyPress={(e) => e.key === 'Enter' && handleManualSearch()}
-              className="text-sm"
-            />
-            <Button onClick={handleManualSearch} disabled={isLoading} size="sm">
-              <Search className="h-3 w-3 mr-1" />
-              {isLoading ? 'Searching...' : 'Search'}
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
-
       {movieInfo && (
         <Card>
           <CardHeader className="pb-2">
@@ -141,6 +117,30 @@ const Index = () => {
           </CardContent>
         </Card>
       )}
+
+      <Card>
+        <CardHeader className="pb-2">
+          <CardTitle className="flex items-center gap-2 text-base">
+            <Search className="h-4 w-4" />
+            Manual Entry
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-2">
+          <div className="flex gap-2">
+            <Input
+              placeholder="Enter barcode..."
+              value={barcode}
+              onChange={(e) => setBarcode(e.target.value)}
+              onKeyPress={(e) => e.key === 'Enter' && handleManualSearch()}
+              className="text-sm"
+            />
+            <Button onClick={handleManualSearch} disabled={isLoading} size="sm">
+              <Search className="h-3 w-3 mr-1" />
+              {isLoading ? 'Searching...' : 'Search'}
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
 
       <div className="text-center text-sm text-muted-foreground space-y-2">
         <p>Scan barcodes with your camera or enter them manually above</p>
