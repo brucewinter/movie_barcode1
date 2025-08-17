@@ -3,7 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Accordion, AccordionItem, AccordionTrigger, AccordionContent } from '@/components/ui/accordion';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Film, Search } from 'lucide-react';
+import { Film, Search, ExternalLink } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import CameraScanner from '@/components/CameraScanner';
 import { supabase } from '@/integrations/supabase/client';
@@ -85,12 +85,45 @@ const Index = () => {
             <div><span className="font-medium">Title:</span> {movieInfo.title}</div>
             {movieInfo.year && <div><span className="font-medium">Year:</span> {movieInfo.year}</div>}
             {movieInfo.director && <div><span className="font-medium">Director:</span> {movieInfo.director}</div>}
-            <div><span className="font-medium">TMDb:</span> {movieInfo.rating}</div>
+            <div className="flex items-center justify-between">
+              <span><span className="font-medium">TMDb:</span> {movieInfo.rating}</span>
+              <Button 
+                variant="outline" 
+                size="sm" 
+                className="h-6 px-2 text-xs"
+                onClick={() => window.open(`https://www.themoviedb.org/search?query=${encodeURIComponent(movieInfo.title)}`, '_blank')}
+              >
+                <ExternalLink className="h-3 w-3 mr-1" />
+                View
+              </Button>
+            </div>
             {movieInfo.imdbRating && movieInfo.imdbRating !== 'N/A' && (
-              <div><span className="font-medium">IMDB:</span> {movieInfo.imdbRating}</div>
+              <div className="flex items-center justify-between">
+                <span><span className="font-medium">IMDB:</span> {movieInfo.imdbRating}</span>
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  className="h-6 px-2 text-xs"
+                  onClick={() => window.open(`https://www.imdb.com/find?q=${encodeURIComponent(movieInfo.title)}`, '_blank')}
+                >
+                  <ExternalLink className="h-3 w-3 mr-1" />
+                  View
+                </Button>
+              </div>
             )}
             {movieInfo.rottenTomatoesRating && movieInfo.rottenTomatoesRating !== 'N/A' && (
-              <div><span className="font-medium">Rotten Tomatoes:</span> {movieInfo.rottenTomatoesRating}</div>
+              <div className="flex items-center justify-between">
+                <span><span className="font-medium">Rotten Tomatoes:</span> {movieInfo.rottenTomatoesRating}</span>
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  className="h-6 px-2 text-xs"
+                  onClick={() => window.open(`https://www.rottentomatoes.com/search?search=${encodeURIComponent(movieInfo.title)}`, '_blank')}
+                >
+                  <ExternalLink className="h-3 w-3 mr-1" />
+                  View
+                </Button>
+              </div>
             )}
             {movieInfo.runtime && <div><span className="font-medium">Runtime:</span> {movieInfo.runtime}</div>}
             {movieInfo.genres && <div><span className="font-medium">Genres:</span> {movieInfo.genres}</div>}
