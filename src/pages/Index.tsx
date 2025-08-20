@@ -6,11 +6,11 @@ import { Input } from '@/components/ui/input';
 import { Film, Search, ExternalLink } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import CameraScanner from '@/components/CameraScanner';
-import { supabase } from '@/integrations/supabase/client';
+import { lookupMovie, type MovieInfo } from '@/services/movieLookup';
 
 const Index = () => {
   const [barcode, setBarcode] = React.useState('');
-  const [movieInfo, setMovieInfo] = React.useState<any>(null);
+  const [movieInfo, setMovieInfo] = React.useState<MovieInfo | null>(null);
   const [isLoading, setIsLoading] = React.useState(false);
   const { toast } = useToast();
 
@@ -28,14 +28,7 @@ const Index = () => {
     setBarcode(scannedBarcode.trim());
 
     try {
-      const { data, error } = await supabase.functions.invoke('lookup-movie', {
-        body: { barcode: scannedBarcode.trim() }
-      });
-
-      if (error) {
-        throw error;
-      }
-
+      const data = await lookupMovie(scannedBarcode.trim());
       setMovieInfo(data);
 
       toast({
@@ -177,15 +170,15 @@ const Index = () => {
 
       <div className="text-center text-sm text-muted-foreground space-y-2">
         <p>Scan barcodes with your camera or enter them manually above</p>
-        {movieInfo?.source === 'barcode_only' && movieInfo?.overview === 'Movie database API key not configured' && (
+        {movieInfo?.source === 'barcode_only' && movieInfo?.overview?.includes('TMDb API key not configured') && (
           <div className="bg-blue-50 p-3 rounded-lg">
             <p className="text-blue-800 font-medium">Setup Required:</p>
             <p className="text-blue-700 text-xs">
-              To get real movie data, add your TMDb API key in Supabase Edge Function Secrets.
+              To get real movie data, add your TMDb API key in <code>src/services/movieLookup.ts</code>.
               Get a free key at <a href="https://www.themoviedb.org/settings/api" target="_blank" className="underline">themoviedb.org</a>
             </p>
             <p className="text-blue-700 text-xs mt-1">
-              In Supabase dashboard → Edge Functions → Secrets, add: <code>TMDB_API_KEY</code>
+              For additional ratings, you can also add an OMDB API key from <a href="http://www.omdbapi.com/apikey.aspx" target="_blank" className="underline">omdbapi.com</a>
             </p>
           </div>
         )}
