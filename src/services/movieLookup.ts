@@ -1,8 +1,8 @@
 // Movie lookup service - independent of Supabase
 // Note: API keys are exposed in frontend code
 
-const TMDB_API_KEY = ''; // Add your TMDb API key here
-const OMDB_API_KEY = ''; // Add your OMDB API key here (optional)
+const TMDB_API_KEY = '3990f0f87103f7ec8eb498d78875108c'; // Add your TMDb API key here
+const OMDB_API_KEY = 'bb03f73a'; // Add your OMDB API key here (optional)
 
 export interface MovieInfo {
   barcode: string;
