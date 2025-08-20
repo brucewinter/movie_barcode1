@@ -23,58 +23,59 @@ export async function lookupMovie(barcode: string): Promise<MovieInfo> {
   const debug: any[] = [];
   
   try {
-    // Step 1: Get product info from UPC database
-    const upcResponse = await fetch(`https://api.upcitemdb.com/prod/trial/lookup?upc=${barcode}`);
-    const upcData = await upcResponse.json();
-    
-    debug.push({ step: 'upc_lookup', data: upcData });
-    
-    if (!upcData.items || upcData.items.length === 0) {
-      return {
-        barcode,
-        title: 'Unknown Product',
-        overview: 'No product found for this barcode',
-        source: 'barcode_only',
-        debug
-      };
+    // Step 1: Try product info from UPC database (may fail due to CORS/trial limits)
+    let productTitle: string | null = null;
+    let cleanTitle: string | null = null;
+    try {
+      const upcResponse = await fetch(`https://api.upcitemdb.com/prod/trial/lookup?upc=${barcode}`);
+      const upcData = await upcResponse.json();
+      
+      debug.push({ step: 'upc_lookup', data: upcData });
+      
+      if (upcData.items && upcData.items.length > 0) {
+        const product = upcData.items[0];
+        productTitle = product.title;
+        
+        // Clean up the title for movie search
+        cleanTitle = productTitle
+          .replace(/\(.*?\)/g, '') // Remove parentheses content
+          .replace(/\[.*?\]/g, '') // Remove brackets content
+          .replace(/\b(DVD|Blu-ray|4K|UHD|Digital|HD)\b/gi, '') // Remove format indicators
+          .replace(/\s+/g, ' ')
+          .trim();
+        
+        debug.push({ step: 'title_cleanup', original: productTitle, cleaned: cleanTitle });
+      } else {
+        debug.push({ step: 'upc_not_found', message: 'No items returned from UPC API' });
+      }
+    } catch (upcError: any) {
+      debug.push({ step: 'upc_error', error: upcError?.message || String(upcError) });
     }
-    
-    const product = upcData.items[0];
-    const productTitle = product.title;
-    
-    // Clean up the title for movie search
-    const cleanTitle = productTitle
-      .replace(/\(.*?\)/g, '') // Remove parentheses content
-      .replace(/\[.*?\]/g, '') // Remove brackets content
-      .replace(/\b(DVD|Blu-ray|4K|UHD|Digital|HD)\b/gi, '') // Remove format indicators
-      .replace(/\s+/g, ' ')
-      .trim();
-    
-    debug.push({ step: 'title_cleanup', original: productTitle, cleaned: cleanTitle });
     
     if (!TMDB_API_KEY) {
       return {
         barcode,
-        title: cleanTitle,
+        title: cleanTitle ?? 'Unknown Title',
         overview: 'TMDb API key not configured. Add your API key to src/services/movieLookup.ts',
         source: 'barcode_only',
         debug
       };
     }
     
-    // Step 2: Search TMDb
-    const tmdbSearchUrl = `https://api.themoviedb.org/3/search/movie?api_key=${TMDB_API_KEY}&query=${encodeURIComponent(cleanTitle)}`;
+    // Step 2: Search TMDb (fallback to using the raw barcode if no title)
+    const searchQuery = (cleanTitle && cleanTitle.length > 0) ? cleanTitle : barcode;
+    const tmdbSearchUrl = `https://api.themoviedb.org/3/search/movie?api_key=${TMDB_API_KEY}&query=${encodeURIComponent(searchQuery)}`;
     const tmdbResponse = await fetch(tmdbSearchUrl);
     const tmdbData = await tmdbResponse.json();
     
-    debug.push({ step: 'tmdb_search', data: tmdbData });
+    debug.push({ step: 'tmdb_search', query: searchQuery, data: tmdbData });
     
     if (!tmdbData.results || tmdbData.results.length === 0) {
       return {
         barcode,
-        title: cleanTitle,
+        title: cleanTitle ?? 'Unknown Title',
         overview: 'No movie found in TMDb database',
-        source: 'upc_only',
+        source: 'tmdb_not_found',
         debug
       };
     }
