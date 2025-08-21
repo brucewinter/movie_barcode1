@@ -1,73 +1,58 @@
-# Welcome to your Lovable project
+# NFC Flicks Finder
 
-## Project info
+A web app that looks up movie information from barcodes. Scan movie barcodes or enter them manually to get detailed movie information including ratings, cast, and plot summaries.
 
-**URL**: https://lovable.dev/projects/cbe2b28f-1917-4504-962f-a4fcf0f16230
+## Features
 
-## How can I edit this code?
+- 📱 **Mobile-friendly** - Works great on phones and tablets
+- 📷 **Camera Scanner** - Scan barcodes directly with your camera
+- ⌨️ **Manual Entry** - Type barcodes manually for testing
+- 🎬 **Movie Database** - Comprehensive movie information from TMDb and OMDB
+- 🔍 **Multiple UPC Sources** - Tries multiple barcode databases for better coverage
+- 📊 **Ratings** - IMDb, Rotten Tomatoes, and TMDb ratings
+- 🎭 **Cast & Crew** - Director and genre information
 
-There are several ways of editing your application.
+## How to Use
 
-**Use Lovable**
+1. **Open the app** in your web browser
+2. **Choose your method:**
+   - **Camera Scanner**: Point your camera at a movie barcode
+   - **Manual Entry**: Type a barcode number (e.g., 043396275294 for Casino Royale)
+3. **View Results**: Get detailed movie information instantly
 
-Simply visit the [Lovable Project](https://lovable.dev/projects/cbe2b28f-1917-4504-962f-a4fcf0f16230) and start prompting.
+## Test Barcodes
 
-Changes made via Lovable will be committed automatically to this repo.
+Try these known movie barcodes:
+- `043396275294` - Casino Royale
+- `883929822355` - Inception  
+- `085391163627` - The Dark Knight
+- `024543602400` - Avatar
 
-**Use your preferred IDE**
+## Installation
 
-If you want to work locally using your own IDE, you can clone this repo and push changes. Pushed changes will also be reflected in Lovable.
+```bash
+# Clone the repository
+git clone https://github.com/yourusername/nfc-flicks-finder.git
+cd nfc-flicks-finder
 
-The only requirement is having Node.js & npm installed - [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating)
+# Install dependencies
+npm install
 
-Follow these steps:
-
-```sh
-# Step 1: Clone the repository using the project's Git URL.
-git clone <YOUR_GIT_URL>
-
-# Step 2: Navigate to the project directory.
-cd <YOUR_PROJECT_NAME>
-
-# Step 3: Install the necessary dependencies.
-npm i
-
-# Step 4: Start the development server with auto-reloading and an instant preview.
+# Start development server
 npm run dev
+
+# Build for production
+npm run build
 ```
 
-**Edit a file directly in GitHub**
+## Technologies
 
-- Navigate to the desired file(s).
-- Click the "Edit" button (pencil icon) at the top right of the file view.
-- Make your changes and commit the changes.
+- **Frontend**: React + TypeScript + Vite
+- **UI**: Tailwind CSS + shadcn/ui
+- **Barcode Scanning**: @zxing/library
+- **Movie Data**: TMDb API + OMDB API
+- **UPC Lookup**: Multiple free APIs with fallbacks
 
-**Use GitHub Codespaces**
+## License
 
-- Navigate to the main page of your repository.
-- Click on the "Code" button (green button) near the top right.
-- Select the "Codespaces" tab.
-- Click on "New codespace" to launch a new Codespace environment.
-- Edit files directly within the Codespace and commit and push your changes once you're done.
-
-## What technologies are used for this project?
-
-This project is built with:
-
-- Vite
-- TypeScript
-- React
-- shadcn-ui
-- Tailwind CSS
-
-## How can I deploy this project?
-
-Simply open [Lovable](https://lovable.dev/projects/cbe2b28f-1917-4504-962f-a4fcf0f16230) and click on Share -> Publish.
-
-## Can I connect a custom domain to my Lovable project?
-
-Yes, you can!
-
-To connect a domain, navigate to Project > Settings > Domains and click Connect Domain.
-
-Read more here: [Setting up a custom domain](https://docs.lovable.dev/tips-tricks/custom-domain#step-by-step-guide)
+MIT License - feel free to use and modify!

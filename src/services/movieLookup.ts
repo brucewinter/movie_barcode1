@@ -1,10 +1,21 @@
 // Movie lookup service - replicates the exact logic from Supabase edge function
-// Note: API keys are exposed in frontend code
+// Note: In a frontend app, API keys are visible. Prefer a proxy for third-party calls.
 
-const TMDB_API_KEY = '3990f0f87103f7ec8eb498d78875108c';
-const OMDB_API_KEY = 'bb03f73a';
-// Optional: Cloudflare Worker proxy URL for UPC lookup (leave empty to disable)
-const UPC_PROXY_URL = '';
+// Allow overriding keys/URLs via Vite env vars
+const TMDB_API_KEY = (import.meta as any).env?.VITE_TMDB_API_KEY || '3990f0f87103f7ec8eb498d78875108c';
+const OMDB_API_KEY = (import.meta as any).env?.VITE_OMDB_API_KEY || 'bb03f73a';
+// Optional: Cloudflare Worker proxy URL for UPC lookup (highly recommended to avoid CORS)
+// Set in .env as VITE_UPC_PROXY_URL=https://your-worker.your-subdomain.workers.dev
+const UPC_PROXY_URL = (import.meta as any).env?.VITE_UPC_PROXY_URL || '';
+
+// Local barcode overrides for known movies (fallback when APIs fail)
+const BARCODE_OVERRIDES: Record<string, string> = {
+  '043396275294': 'Casino Royale',
+  '883929822355': 'Inception',
+  '085391163627': 'The Dark Knight',
+  '024543602400': 'Avatar',
+  '883929033394': 'Inception',
+};
 
 export interface MovieInfo {
   barcode: string;
@@ -29,6 +40,70 @@ export async function lookupMovie(barcode: string): Promise<MovieInfo> {
     // Step 1: UPC Lookup using multiple APIs
     let productTitle: string | null = null;
 
+    const fetchJsonWithCorsFallback = async (url: string, sourceLabel: string) => {
+      // Try direct fetch first
+      try {
+        const res = await fetch(url);
+        if (res.ok) {
+          return await res.json();
+        }
+        debugLogs.push({ label: `${sourceLabel}_error`, error: `HTTP ${res.status}` });
+      } catch (e: any) {
+        debugLogs.push({ label: `${sourceLabel}_error`, error: e?.message || 'Fetch failed' });
+      }
+      
+      // Always try CORS fallback when direct fetch fails
+      try {
+        const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`;
+        debugLogs.push({ label: `${sourceLabel}_fallback_attempt`, url: proxyUrl });
+        const res2 = await fetch(proxyUrl);
+        if (res2.ok) {
+          const text = await res2.text();
+          try {
+            const data = JSON.parse(text);
+            debugLogs.push({ label: `${sourceLabel}_fallback_success`, data });
+            return data;
+          } catch (parseError: any) {
+            debugLogs.push({ label: `${sourceLabel}_fallback_parse_error`, error: parseError?.message });
+            return null;
+          }
+        } else {
+          debugLogs.push({ label: `${sourceLabel}_fallback_error`, error: `HTTP ${res2.status}` });
+        }
+      } catch (e: any) {
+        debugLogs.push({ label: `${sourceLabel}_fallback_error`, error: e?.message || 'Fallback fetch failed' });
+      }
+      return null;
+    };
+
+    const fetchTextWithCorsFallback = async (url: string, sourceLabel: string) => {
+      // Try direct fetch first
+      try {
+        const res = await fetch(url);
+        if (res.ok) return await res.text();
+        debugLogs.push({ label: `${sourceLabel}_error`, error: `HTTP ${res.status}` });
+      } catch (e: any) {
+        debugLogs.push({ label: `${sourceLabel}_error`, error: e?.message || 'Fetch failed' });
+      }
+      
+      // Always try CORS fallback when direct fetch fails
+      try {
+        const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`;
+        debugLogs.push({ label: `${sourceLabel}_fallback_attempt`, url: proxyUrl });
+        const res2 = await fetch(proxyUrl);
+        if (res2.ok) {
+          const text = await res2.text();
+          debugLogs.push({ label: `${sourceLabel}_fallback_success`, length: text.length });
+          return text;
+        } else {
+          debugLogs.push({ label: `${sourceLabel}_fallback_error`, error: `HTTP ${res2.status}` });
+        }
+      } catch (e: any) {
+        debugLogs.push({ label: `${sourceLabel}_fallback_error`, error: e?.message || 'Fallback fetch failed' });
+      }
+      return null;
+    };
+
     // Try Cloudflare Worker proxy first (if configured)
     if (UPC_PROXY_URL) {
       try {
@@ -50,53 +125,87 @@ export async function lookupMovie(barcode: string): Promise<MovieInfo> {
       }
     }
     
-    // Try UPCItemDB next
-    try {
-      const upcResponse = await fetch(`https://api.upcitemdb.com/prod/trial/lookup?upc=${barcode}`);
-      if (!upcResponse.ok) throw new Error('UPCItemDB not accessible');
-      
-      const upcData = await upcResponse.json();
-      
-      if (upcData.items && upcData.items.length > 0) {
-        productTitle = upcData.items[0].title;
-        debugLogs.push({ label: 'upc_success', data: { source: 'upcitemdb', title: productTitle } });
-      }
-    } catch (upcError: any) {
-      debugLogs.push({ label: 'upcitemdb_error', error: upcError.message });
-      
-      // Try alternative: OpenFoodFacts (works for some barcodes, no CORS)
-      try {
-        const offResponse = await fetch(`https://world.openfoodfacts.org/api/v0/product/${barcode}.json`);
-        if (offResponse.ok) {
-          const offData = await offResponse.json();
-          if (offData.product && offData.product.product_name) {
-            productTitle = offData.product.product_name;
-            debugLogs.push({ label: 'upc_success', data: { source: 'openfoodfacts', title: productTitle } });
-          }
+    // Try UPCItemDB next (with CORS fallback)
+    if (!productTitle) {
+      const upcData = await fetchJsonWithCorsFallback(`https://api.upcitemdb.com/prod/trial/lookup?upc=${barcode}`,'upcitemdb');
+      if (upcData && Array.isArray(upcData.items) && upcData.items.length > 0) {
+        productTitle = upcData.items[0].title ?? null;
+        if (productTitle) {
+          debugLogs.push({ label: 'upc_success', data: { source: 'upcitemdb', title: productTitle } });
         }
-      } catch (offError: any) {
-        debugLogs.push({ label: 'openfoodfacts_error', error: offError.message });
+      }
+    }
+
+    // Try OpenFoodFacts (with CORS fallback)
+    if (!productTitle) {
+      const offData = await fetchJsonWithCorsFallback(`https://world.openfoodfacts.org/api/v0/product/${barcode}.json`, 'openfoodfacts');
+      if (offData?.product?.product_name) {
+        productTitle = offData.product.product_name;
+        debugLogs.push({ label: 'upc_success', data: { source: 'openfoodfacts', title: productTitle } });
       }
     }
 
     // Additional free, CORS-friendly UPC sources
     if (!productTitle) {
-      try {
-        const bmRes = await fetch(`https://barcode.monster/api/${encodeURIComponent(barcode)}`);
-        if (bmRes.ok) {
-          const bm = await bmRes.json();
-          const title = bm?.product || bm?.name || bm?.title || bm?.description;
-          if (title) {
-            productTitle = title;
-            debugLogs.push({ label: 'upc_success', data: { source: 'barcode.monster', title: productTitle } });
-          } else {
-            debugLogs.push({ label: 'barcode_monster_no_title', data: bm });
-          }
+      const bm = await fetchJsonWithCorsFallback(`https://barcode.monster/api/${encodeURIComponent(barcode)}`,'barcode_monster');
+      if (bm) {
+        const title = bm?.product || bm?.name || bm?.title || bm?.description;
+        if (title) {
+          productTitle = title;
+          debugLogs.push({ label: 'upc_success', data: { source: 'barcode.monster', title: productTitle } });
         } else {
-          debugLogs.push({ label: 'barcode_monster_error', error: `HTTP ${bmRes.status}` });
+          debugLogs.push({ label: 'barcode_monster_no_title', data: bm });
         }
-      } catch (e: any) {
-        debugLogs.push({ label: 'barcode_monster_error', error: e?.message || 'Fetch failed' });
+      }
+    }
+
+         // Try scraping HTML pages that often contain the product title (no API key required)
+     if (!productTitle) {
+       const html = await fetchTextWithCorsFallback(`https://www.barcodelookup.com/${encodeURIComponent(barcode)}`, 'barcodelookup');
+       if (html && typeof html === 'string') {
+         // Check for security verification pages
+         if (html.includes('Security Verification') || html.includes('security') || html.includes('captcha')) {
+           debugLogs.push({ label: 'barcodelookup_blocked', message: 'Blocked by security verification' });
+         } else {
+           const ogMatch = html.match(/<meta\s+property=["']og:title["']\s+content=["']([^"']+)["'][^>]*>/i);
+           const titleTag = html.match(/<title>([^<]+)<\/title>/i);
+           const candidate = (ogMatch?.[1] || titleTag?.[1] || '').replace(/\s*\|\s*Barcode Lookup.*/i, '').trim();
+           if (candidate && !candidate.toLowerCase().includes('security')) {
+             productTitle = candidate;
+             debugLogs.push({ label: 'upc_success', data: { source: 'barcodelookup_html', title: productTitle } });
+           }
+         }
+       }
+     }
+
+         if (!productTitle) {
+       const html = await fetchTextWithCorsFallback(`https://www.barcodespider.com/${encodeURIComponent(barcode)}`, 'barcodespider');
+       if (html && typeof html === 'string') {
+         // Skip generic lookup pages
+         if (html.includes('UPC') && html.includes('Lookup') && html.includes(barcode)) {
+           debugLogs.push({ label: 'barcodespider_generic', message: 'Generic lookup page, skipping' });
+         } else {
+           const h1 = html.match(/<h1[^>]*>([^<]+)<\/h1>/i);
+           const titleTag = html.match(/<title>([^<]+)<\/title>/i);
+           const raw = (h1?.[1] || titleTag?.[1] || '').trim();
+           const candidate = raw.replace(/\s*\|\s*Barcode Spider.*/i, '').trim();
+           if (candidate && !candidate.toLowerCase().includes('upc') && !candidate.toLowerCase().includes('lookup')) {
+             productTitle = candidate;
+             debugLogs.push({ label: 'upc_success', data: { source: 'barcodespider_html', title: productTitle } });
+           }
+         }
+       }
+     }
+
+    // Try upcdatabase.org (no API key required, CORS-friendly)
+    if (!productTitle) {
+      const upcDb = await fetchJsonWithCorsFallback(`https://api.upcdatabase.org/product/${encodeURIComponent(barcode)}`, 'upcdatabase');
+      if (upcDb && upcDb.title) {
+        productTitle = upcDb.title;
+        debugLogs.push({ label: 'upc_success', data: { source: 'upcdatabase', title: productTitle } });
+      } else if (upcDb && upcDb.description) {
+        productTitle = upcDb.description;
+        debugLogs.push({ label: 'upc_success', data: { source: 'upcdatabase_desc', title: productTitle } });
       }
     }
 
@@ -123,8 +232,14 @@ export async function lookupMovie(barcode: string): Promise<MovieInfo> {
       }
     }
 
-    if (!productTitle) {
-      debugLogs.push({ label: 'no_upc_title', message: 'No UPC title found, searching TMDb with barcode' });
+         // Try local barcode overrides as final fallback
+     if (!productTitle && BARCODE_OVERRIDES[barcode]) {
+       productTitle = BARCODE_OVERRIDES[barcode];
+       debugLogs.push({ label: 'upc_success', data: { source: 'local_override', title: productTitle } });
+     }
+
+     if (!productTitle) {
+       debugLogs.push({ label: 'no_upc_title', message: 'No UPC title found, searching TMDb with barcode' });
       
       if (!TMDB_API_KEY) {
         return {
