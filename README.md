@@ -1,4 +1,4 @@
-# NFC Flicks Finder
+# MovieBarcode
 
 A web app that looks up movie information from barcodes. Scan movie barcodes or enter them manually to get detailed movie information including ratings, cast, and plot summaries.
 
@@ -32,8 +32,8 @@ Try these known movie barcodes:
 
 ```bash
 # Clone the repository
-git clone https://github.com/yourusername/nfc-flicks-finder.git
-cd nfc-flicks-finder
+git clone https://github.com/brucewinter/movie_barcode1.git
+cd movie_barcode1
 
 # Install dependencies
 npm install
