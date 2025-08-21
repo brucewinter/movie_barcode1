@@ -24,20 +24,36 @@ export async function lookupMovie(barcode: string): Promise<MovieInfo> {
   debugLogs.push({ label: 'incoming', data: { barcode } });
 
   try {
-    // Step 1: UPC Lookup (may fail due to CORS in preview)
+    // Step 1: UPC Lookup using multiple APIs
     let productTitle: string | null = null;
+    
+    // Try UPCItemDB first
     try {
       const upcResponse = await fetch(`https://api.upcitemdb.com/prod/trial/lookup?upc=${barcode}`);
-      if (!upcResponse.ok) throw new Error('UPC API not accessible');
+      if (!upcResponse.ok) throw new Error('UPCItemDB not accessible');
       
       const upcData = await upcResponse.json();
       
       if (upcData.items && upcData.items.length > 0) {
         productTitle = upcData.items[0].title;
+        debugLogs.push({ label: 'upc_success', data: { source: 'upcitemdb', title: productTitle } });
       }
     } catch (upcError: any) {
-      debugLogs.push({ label: 'upc_error', error: upcError.message });
-      // Continue without UPC data - we'll search TMDb directly with barcode
+      debugLogs.push({ label: 'upcitemdb_error', error: upcError.message });
+      
+      // Try alternative: OpenFoodFacts (works for some barcodes, no CORS)
+      try {
+        const offResponse = await fetch(`https://world.openfoodfacts.org/api/v0/product/${barcode}.json`);
+        if (offResponse.ok) {
+          const offData = await offResponse.json();
+          if (offData.product && offData.product.product_name) {
+            productTitle = offData.product.product_name;
+            debugLogs.push({ label: 'upc_success', data: { source: 'openfoodfacts', title: productTitle } });
+          }
+        }
+      } catch (offError: any) {
+        debugLogs.push({ label: 'openfoodfacts_error', error: offError.message });
+      }
     }
 
     if (!productTitle) {
