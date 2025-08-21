@@ -56,7 +56,7 @@ const Index = () => {
       <div className="text-center space-y-1">
         <h1 className="text-2xl font-bold flex items-center justify-center gap-2">
           <Film className="h-6 w-6" />
-          Flicks Finder
+          MovieBarcode
         </h1>
         <p className="text-muted-foreground text-sm">
           Scan or enter a movie barcode to get information
