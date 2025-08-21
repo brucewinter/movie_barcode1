@@ -79,6 +79,50 @@ export async function lookupMovie(barcode: string): Promise<MovieInfo> {
       }
     }
 
+    // Additional free, CORS-friendly UPC sources
+    if (!productTitle) {
+      try {
+        const bmRes = await fetch(`https://barcode.monster/api/${encodeURIComponent(barcode)}`);
+        if (bmRes.ok) {
+          const bm = await bmRes.json();
+          const title = bm?.product || bm?.name || bm?.title || bm?.description;
+          if (title) {
+            productTitle = title;
+            debugLogs.push({ label: 'upc_success', data: { source: 'barcode.monster', title: productTitle } });
+          } else {
+            debugLogs.push({ label: 'barcode_monster_no_title', data: bm });
+          }
+        } else {
+          debugLogs.push({ label: 'barcode_monster_error', error: `HTTP ${bmRes.status}` });
+        }
+      } catch (e: any) {
+        debugLogs.push({ label: 'barcode_monster_error', error: e?.message || 'Fetch failed' });
+      }
+    }
+
+    if (!productTitle) {
+      try {
+        const ofacts = [
+          'https://world.openproductsfacts.org/api/v0/product/',
+          'https://world.openbeautyfacts.org/api/v0/product/',
+          'https://world.openpetfoodfacts.org/api/v0/product/'
+        ];
+        for (const base of ofacts) {
+          const res = await fetch(`${base}${barcode}.json`);
+          if (!res.ok) continue;
+          const data = await res.json();
+          const title = data?.product?.product_name || data?.product?.brands || data?.product?.generic_name;
+          if (title) {
+            productTitle = title;
+            debugLogs.push({ label: 'upc_success', data: { source: base.includes('beauty') ? 'openbeautyfacts' : base.includes('petfood') ? 'openpetfoodfacts' : 'openproductsfacts', title: productTitle } });
+            break;
+          }
+        }
+      } catch (e: any) {
+        debugLogs.push({ label: 'openproducts_variants_error', error: e?.message || 'Fetch failed' });
+      }
+    }
+
     if (!productTitle) {
       debugLogs.push({ label: 'no_upc_title', message: 'No UPC title found, searching TMDb with barcode' });
       
