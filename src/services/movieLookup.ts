@@ -3,6 +3,8 @@
 
 const TMDB_API_KEY = '3990f0f87103f7ec8eb498d78875108c';
 const OMDB_API_KEY = 'bb03f73a';
+// Optional: Cloudflare Worker proxy URL for UPC lookup (leave empty to disable)
+const UPC_PROXY_URL = '';
 
 export interface MovieInfo {
   barcode: string;
@@ -26,8 +28,29 @@ export async function lookupMovie(barcode: string): Promise<MovieInfo> {
   try {
     // Step 1: UPC Lookup using multiple APIs
     let productTitle: string | null = null;
+
+    // Try Cloudflare Worker proxy first (if configured)
+    if (UPC_PROXY_URL) {
+      try {
+        const proxyRes = await fetch(`${UPC_PROXY_URL}?upc=${encodeURIComponent(barcode)}`);
+        if (proxyRes.ok) {
+          const proxyData = await proxyRes.json();
+          const title = proxyData?.title || proxyData?.items?.[0]?.title;
+          if (title) {
+            productTitle = title;
+            debugLogs.push({ label: 'upc_success', data: { source: 'proxy', title: productTitle } });
+          } else {
+            debugLogs.push({ label: 'proxy_no_title', data: proxyData });
+          }
+        } else {
+          debugLogs.push({ label: 'proxy_error', error: `HTTP ${proxyRes.status}` });
+        }
+      } catch (e: any) {
+        debugLogs.push({ label: 'proxy_error', error: e?.message || 'Proxy fetch failed' });
+      }
+    }
     
-    // Try UPCItemDB first
+    // Try UPCItemDB next
     try {
       const upcResponse = await fetch(`https://api.upcitemdb.com/prod/trial/lookup?upc=${barcode}`);
       if (!upcResponse.ok) throw new Error('UPCItemDB not accessible');
